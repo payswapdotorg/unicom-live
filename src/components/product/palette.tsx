@@ -3,11 +3,10 @@
 import { useEffect } from "react";
 import {
   CheckSquare,
-  LayoutDashboard,
+  LayoutGrid,
   ListTodo,
   MessageSquare,
   Plug,
-  Plus,
   Puzzle,
   Radar,
   RefreshCw,
@@ -27,20 +26,20 @@ import {
 } from "@/components/ui/command";
 import { useProduct, type Section } from "@/lib/product/store";
 
-// ⌘K — the command palette. Jump to any of the nine sections, run the
+// ⌘K — the command palette. Jump to any of the eight sections, run the
 // standing actions, or pick up the latest watch events. The whole console
-// is reachable without touching the rail (R-B2).
+// is reachable without touching the rail (R-B2). New task stays a standing
+// action (the primary commission path), not a section nav item.
 
 const NAV_ITEMS: { id: Section; label: string; icon: typeof Radar }[] = [
-  { id: "command", label: "Command", icon: LayoutDashboard },
-  { id: "stores", label: "Stores", icon: Store },
+  { id: "overview", label: "Overview", icon: LayoutGrid },
   { id: "missions", label: "Missions", icon: ListTodo },
   { id: "chat", label: "Commander", icon: MessageSquare },
   { id: "decisions", label: "Decisions", icon: CheckSquare },
+  { id: "stores", label: "Stores", icon: Store },
   { id: "watch", label: "Watch", icon: Radar },
   { id: "skills", label: "Skills", icon: Puzzle },
   { id: "settings", label: "Settings", icon: Settings },
-  { id: "newtask", label: "New Task", icon: Plus },
 ];
 
 export function CommandPalette({
@@ -114,9 +113,9 @@ export function CommandPalette({
             <RefreshCw className="h-4 w-4" />
             Sync all stores
           </CommandItem>
-          <CommandItem onSelect={() => go("command")}>
+          <CommandItem onSelect={() => go("overview")}>
             <Sparkles className="h-4 w-4" />
-            Open morning brief
+            Open today's brief
           </CommandItem>
         </CommandGroup>
 

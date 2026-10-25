@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Eye, Plus, ShieldCheck } from "lucide-react";
+import { Check, Eye, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,19 +20,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProduct } from "@/lib/product/store";
 
-// Skills — pluggable capability packs. Install per store; watch them work.
-// Risk tiers are honest: read-only, acts-with-approval, autonomous.
+// Skills — pluggable capability packs (spec §7-4c). Install per store; a
+// skill starts watching the moment it lands. The reference card records how
+// the risk tiers read — read-only, acts-with-approval, autonomous.
+
+const RISK_TIERS = [
+  { term: "read-only", line: "skills never write.", eye: true },
+  { term: "acts-with-approval", line: "skills draft decisions for the frontier.", eye: false },
+  { term: "autonomous", line: "skills act within rails you set — and every action is still on the record.", eye: false },
+] as const;
+
 export function SkillsSection() {
   const { skills, stores, toggleSkill } = useProduct();
 
   return (
-    <div className="space-y-6">
-      <header>
+    <div className="flex flex-col gap-6">
+      {/* Scaffold (spec §5) */}
+      <header className="flex flex-col gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          UNiCOM Commerce Workspace
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="max-w-2xl text-sm text-muted-foreground">
           Capability packs for the agent pool. Install per store — a skill
-          starts watching the moment it lands, and every risky action still
-          comes back as a decision.
+          starts watching the moment it lands.
         </p>
       </header>
 
@@ -114,7 +125,7 @@ export function SkillsSection() {
                             <Button
                               size="sm"
                               variant={everywhere ? "outline" : "default"}
-                              className="flex-1"
+                              className="min-h-11 flex-1"
                             >
                               <Plus className="mr-1 h-3.5 w-3.5" />
                               {everywhere ? "Manage" : "Install"}
@@ -158,22 +169,36 @@ export function SkillsSection() {
         })}
       </div>
 
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <p className="text-sm font-medium">
-            The risk tiers are honest
-          </p>
-          <p className="max-w-md text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <Eye className="h-3 w-3" /> read-only
-            </span>{" "}
-            skills never write.{" "}
-            <span className="font-medium">acts-with-approval</span> skills
-            draft decisions for the frontier.{" "}
-            <span className="font-medium">autonomous</span> skills act within
-            rails you set — and every action is still on the record.
-          </p>
+      {/* Reference — the risk tiers, honestly (never live data) */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">
+              The risk tiers are honest
+            </h2>
+            <Badge
+              variant="outline"
+              className="shrink-0 text-muted-foreground"
+            >
+              Reference
+            </Badge>
+          </div>
+          <dl className="flex flex-col gap-2.5">
+            {RISK_TIERS.map((tier) => (
+              <div
+                key={tier.term}
+                className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-4"
+              >
+                <dt className="flex shrink-0 items-center gap-1.5 text-sm font-medium sm:w-44">
+                  {tier.eye && <Eye className="h-3.5 w-3.5" aria-hidden />}
+                  {tier.term}
+                </dt>
+                <dd className="text-sm text-muted-foreground">
+                  {tier.line}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </CardContent>
       </Card>
     </div>

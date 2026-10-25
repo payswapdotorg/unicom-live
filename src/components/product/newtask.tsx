@@ -4,12 +4,7 @@ import { motion } from "framer-motion";
 import { RotateCcw, Rocket, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -24,9 +19,14 @@ import {
   type GuardrailKey,
 } from "@/lib/product/data";
 
-// New task — the composer. One screen that turns a sentence into a running
-// mission: scope, skills, context, project, autonomy, guardrails — and a
-// live mission preview that mirrors the draft until you launch.
+// New task — the composer, and the console's primary action (topbar button,
+// rail button, ⌘K action, Overview intake). One screen that turns a sentence
+// into a running mission: scope, skills, context, project, autonomy,
+// guardrails — and a live mission preview that mirrors the draft until you
+// launch. Prefills from the Overview intake and outcome shortcuts land here
+// through the shared draft state (draft.goal), so the form and the preview
+// always render what the workspace already knows.
+
 export function NewTaskSection() {
   const {
     draft,
@@ -85,10 +85,14 @@ export function NewTaskSection() {
   };
 
   return (
-    <div className="space-y-6">
-      <header>
+    <div className="flex flex-col gap-6">
+      {/* Scaffold (spec §5) */}
+      <header className="flex flex-col gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          UNiCOM Commerce Workspace
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight">New task</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="max-w-2xl text-sm text-muted-foreground">
           Say what needs doing — the agent plans it, guards it, and reports
           evidence at every step.
         </p>
@@ -96,22 +100,24 @@ export function NewTaskSection() {
 
       <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
         {/* ——— Composer ——— */}
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 flex flex-col gap-6">
           {/* Quick-start templates */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Quick-start templates</CardTitle>
-                <p className="text-xs text-muted-foreground">
+            <Card className="gap-4 py-5">
+              <CardHeader className="px-5">
+                <h2 className="text-base font-semibold">
+                  Quick-start templates
+                </h2>
+                <p className="text-sm text-muted-foreground">
                   One click drops a proven goal into the composer — edit from
                   there.
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-5">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {TASK_TEMPLATES.map((t) => {
                     const active = draft.goal.trim() === t.goal;
@@ -121,10 +127,10 @@ export function NewTaskSection() {
                         type="button"
                         onClick={() => setDraft({ goal: t.goal })}
                         aria-pressed={active}
-                        className={`flex min-h-11 items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                        className={`flex min-h-11 items-start gap-3 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                           active
-                            ? "border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25"
-                            : "hover:border-primary/40 hover:bg-accent"
+                            ? "border-primary/40 bg-accent"
+                            : "hover:border-foreground/25 hover:bg-muted/40"
                         }`}
                       >
                         <span
@@ -134,10 +140,12 @@ export function NewTaskSection() {
                           {t.glyph}
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium">
+                          <span
+                            className={`block text-sm ${active ? "font-medium text-accent-foreground" : "font-medium"}`}
+                          >
                             {t.title}
                           </span>
-                          <span className="block text-[11px] leading-tight text-muted-foreground">
+                          <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
                             {t.blurb}
                           </span>
                         </span>
@@ -155,11 +163,11 @@ export function NewTaskSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05, duration: 0.3 }}
           >
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">The job</CardTitle>
+            <Card className="gap-4 py-5">
+              <CardHeader className="px-5">
+                <h2 className="text-base font-semibold">The job</h2>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-2 px-5">
                 <Label htmlFor="task-goal" className="sr-only">
                   Describe the job
                 </Label>
@@ -171,7 +179,7 @@ export function NewTaskSection() {
                   rows={5}
                   className="min-h-28 resize-y text-sm leading-relaxed"
                 />
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   Examples:{" "}
                   <span className="font-mono text-foreground/80">
                     “reprice the linen throw to stay competitive but keep 60%
@@ -192,15 +200,15 @@ export function NewTaskSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.3 }}
           >
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Scope</CardTitle>
-                <p className="text-xs text-muted-foreground">
+            <Card className="gap-4 py-5">
+              <CardHeader className="px-5">
+                <h2 className="text-base font-semibold">Scope</h2>
+                <p className="text-sm text-muted-foreground">
                   Where the task runs, which skills it may lean on, and what
                   context it starts with.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 px-5">
                 {/* Stores */}
                 <fieldset>
                   <legend className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -222,10 +230,10 @@ export function NewTaskSection() {
                             type="button"
                             onClick={() => toggleStore(s.id)}
                             aria-pressed={pressed}
-                            className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${
+                            className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                               pressed
-                                ? "border-primary/60 bg-primary/10 font-medium text-primary"
-                                : "text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
+                                ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+                                : "text-muted-foreground hover:border-foreground/25 hover:text-foreground"
                             }`}
                           >
                             <span
@@ -256,10 +264,10 @@ export function NewTaskSection() {
                           type="button"
                           onClick={() => toggleSkill(sk.id)}
                           aria-pressed={pressed}
-                          className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${
+                          className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                             pressed
-                              ? "border-primary/60 bg-primary/10 font-medium text-primary"
-                              : "text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
+                                ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+                                : "text-muted-foreground hover:border-foreground/25 hover:text-foreground"
                           }`}
                         >
                           <span className="font-mono text-xs" aria-hidden>
@@ -286,10 +294,10 @@ export function NewTaskSection() {
                           type="button"
                           onClick={() => toggleContext(c.id)}
                           aria-pressed={pressed}
-                          className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${
+                          className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                             pressed
-                              ? "border-primary/60 bg-primary/10 font-medium text-primary"
-                              : "text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
+                                ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+                                : "text-muted-foreground hover:border-foreground/25 hover:text-foreground"
                           }`}
                         >
                           {c.label}
@@ -308,14 +316,14 @@ export function NewTaskSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.3 }}
           >
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Project</CardTitle>
-                <p className="text-xs text-muted-foreground">
+            <Card className="gap-4 py-5">
+              <CardHeader className="px-5">
+                <h2 className="text-base font-semibold">Project</h2>
+                <p className="text-sm text-muted-foreground">
                   File this task under a group so the board stays readable.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 px-5">
                 <fieldset>
                   <legend className="sr-only">Project group</legend>
                   <div
@@ -374,14 +382,14 @@ export function NewTaskSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.3 }}
           >
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Autonomy</CardTitle>
-                <p className="text-xs text-muted-foreground">
+            <Card className="gap-4 py-5">
+              <CardHeader className="px-5">
+                <h2 className="text-base font-semibold">Autonomy</h2>
+                <p className="text-sm text-muted-foreground">
                   How much rope the agent gets before you see anything.
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-5">
                 <RadioGroup
                   value={draft.autonomy}
                   onValueChange={(v) =>
@@ -413,51 +421,53 @@ export function NewTaskSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25, duration: 0.3 }}
           >
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShieldCheck className="h-4 w-4 text-primary" />
+            <Card className="gap-4 py-5">
+              <CardHeader className="px-5">
+                <h2 className="flex items-center gap-2 text-base font-semibold">
+                  <ShieldCheck className="h-4 w-4 text-primary" aria-hidden />
                   Guardrails
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
+                </h2>
+                <p className="text-sm text-muted-foreground">
                   {guardCount === 4
                     ? "All four guards on — the safe default."
                     : `${guardCount} of 4 on — loosen carefully.`}
                 </p>
               </CardHeader>
-              <CardContent className="space-y-1">
-                {GUARDRAILS.map((g) => {
-                  const on = draft.guardrails[g.key];
-                  return (
-                    <div
-                      key={g.key}
-                      className="flex min-h-11 items-center gap-3 rounded-lg px-1 py-1.5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <label
-                          htmlFor={`guard-${g.key}`}
-                          className="block text-sm font-medium"
-                        >
-                          {g.label}
-                        </label>
-                        <p className="text-[11px] text-muted-foreground">
-                          {g.helper}
-                        </p>
-                        {!on && (
-                          <p className="mt-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                            agent may act without asking
+              <CardContent className="px-5">
+                <div className="divide-y divide-border/60">
+                  {GUARDRAILS.map((g) => {
+                    const on = draft.guardrails[g.key];
+                    return (
+                      <div
+                        key={g.key}
+                        className="flex min-h-11 items-center gap-3 py-3 first:pt-0 last:pb-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <label
+                            htmlFor={`guard-${g.key}`}
+                            className="block text-sm font-medium"
+                          >
+                            {g.label}
+                          </label>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {g.helper}
                           </p>
-                        )}
+                          {!on && (
+                            <p className="mt-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                              agent may act without asking
+                            </p>
+                          )}
+                        </div>
+                        <Switch
+                          id={`guard-${g.key}`}
+                          checked={on}
+                          onCheckedChange={() => toggleGuardrail(g.key)}
+                          aria-label={g.label}
+                        />
                       </div>
-                      <Switch
-                        id={`guard-${g.key}`}
-                        checked={on}
-                        onCheckedChange={() => toggleGuardrail(g.key)}
-                        aria-label={g.label}
-                      />
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -468,17 +478,17 @@ export function NewTaskSection() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.3 }}
-          className="xl:sticky xl:top-24 xl:self-start"
+          className="xl:sticky xl:top-[calc(3.5rem+2rem)] xl:self-start"
           aria-label="Mission preview"
         >
-          <Card className="border-primary/25">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Mission preview</CardTitle>
-              <p className="text-xs text-muted-foreground">
+          <Card className="gap-4 py-5">
+            <CardHeader className="px-5">
+              <h2 className="text-base font-semibold">Mission preview</h2>
+              <p className="text-sm text-muted-foreground">
                 What the orchestrator receives when you launch.
               </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 px-5">
               <div>
                 <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Job
@@ -599,12 +609,11 @@ export function NewTaskSection() {
 
               <div className="space-y-2 pt-2">
                 <Button
-                  className="w-full"
-                  size="lg"
+                  className="h-11 w-full"
                   disabled={!ready}
                   onClick={() => launchTask()}
                 >
-                  <Rocket className="mr-1 h-4 w-4" />
+                  <Rocket className="mr-1 h-4 w-4" aria-hidden />
                   Launch task
                 </Button>
                 <p className="min-h-8 text-center text-[11px] leading-snug text-muted-foreground">
@@ -618,13 +627,13 @@ export function NewTaskSection() {
                 </p>
                 <Button
                   variant="ghost"
-                  className="w-full"
+                  className="min-h-11 w-full"
                   onClick={() => {
                     resetDraft();
                     pushToast("Draft cleared", "Back to a blank slate — all stores re-scoped.");
                   }}
                 >
-                  <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" aria-hidden />
                   Start over
                 </Button>
               </div>
@@ -674,10 +683,10 @@ function ProjectChip({
       role="radio"
       aria-checked={checked}
       onClick={onCheck}
-      className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${
+      className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
         checked
-          ? "border-primary/60 bg-primary/10 font-medium text-primary"
-          : "text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
+          ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+          : "text-muted-foreground hover:border-foreground/25 hover:text-foreground"
       }`}
     >
       {dot && (
@@ -708,16 +717,20 @@ function AutonomyCard({
 }) {
   return (
     <label
-      className={`flex min-h-24 cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+      className={`flex min-h-24 cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring/40 ${
         checked
-          ? "border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25"
-          : "hover:border-primary/40 hover:bg-accent"
+          ? "border-primary/40 bg-accent"
+          : "hover:border-foreground/25"
       }`}
     >
       <RadioGroupItem value={value} className="mt-0.5" />
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{title}</span>
+          <span
+            className={`text-sm font-medium ${checked ? "text-accent-foreground" : ""}`}
+          >
+            {title}
+          </span>
           {badge && (
             <Badge
               variant="outline"

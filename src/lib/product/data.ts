@@ -12,7 +12,8 @@ export type PlatformId =
   | "etsy"
   | "amazon"
   | "squarespace"
-  | "bigcommerce";
+  | "bigcommerce"
+  | "local";
 
 export type Platform = {
   id: PlatformId;
@@ -29,6 +30,7 @@ export const PLATFORMS: Platform[] = [
   { id: "amazon", name: "Amazon", glyph: "a", tint: "text-amber-500", catalog: "Listings · Orders · FBA · Ads" },
   { id: "squarespace", name: "Squarespace", glyph: "◻", tint: "text-stone-400", catalog: "Products · Orders · Pages" },
   { id: "bigcommerce", name: "BigCommerce", glyph: "B", tint: "text-red-400", catalog: "Products · Orders · Carts" },
+  { id: "local", name: "Local", glyph: "⌂", tint: "text-amber-600", catalog: "In-person · POS · Local pickup · Camera capture" },
 ];
 
 export type StoreHealth = "healthy" | "attention" | "syncing";
@@ -771,7 +773,7 @@ export const SEED_SETTINGS: SettingsState = {
 // ——— New task: composer option vocabularies ———
 
 export const CONTEXT_OPTIONS = [
-  { id: "morning-brief", label: "Morning brief" },
+  { id: "morning-brief", label: "Today's brief" },
   { id: "watch-feed", label: "Watch feed" },
   { id: "competitor-digest", label: "Competitor digest" },
 ];

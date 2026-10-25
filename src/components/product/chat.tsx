@@ -14,7 +14,9 @@ import { platformOf } from "@/lib/product/data";
 // acts across every connected store, and reports evidence inline.
 // Plan-first (R-B2): the proposed plan holds at step 0 until you approve
 // it. @-context chips pin what the agent should work with. Risky steps
-// become decisions on the frontier, never silent actions.
+// become decisions on the frontier, never silent actions. The transcript
+// is a bounded, keyboard-scrollable record — merchant right, agent left,
+// ids honest in mono.
 
 export function ChatSection() {
   const {
@@ -73,7 +75,7 @@ export function ChatSection() {
       const p = platformOf(s.platform);
       return { id: s.id, label: `@${s.name}`, glyph: p.glyph, tint: p.tint };
     }),
-    { id: "morning-brief", label: "Morning brief" },
+    { id: "morning-brief", label: "Today's brief" },
     { id: "watch-feed", label: "Watch feed" },
   ];
 
@@ -83,7 +85,7 @@ export function ChatSection() {
     ids.map((id) => {
       const store = stores.find((s) => s.id === id);
       if (store) return store.name;
-      if (id === "morning-brief") return "Morning brief";
+      if (id === "morning-brief") return "Today's brief";
       if (id === "watch-feed") return "Watch feed";
       return id;
     });
@@ -100,27 +102,36 @@ export function ChatSection() {
   ];
 
   return (
-    <div className="flex h-[calc(100dvh-12.5rem)] flex-col space-y-4 lg:h-[calc(100dvh-11.5rem)]">
-      <header>
+    <div className="flex flex-col gap-6">
+      {/* Scaffold (spec §5) */}
+      <header className="flex flex-col gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          UNiCOM Commerce Workspace
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight">Commander</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="max-w-2xl text-sm text-muted-foreground">
           One agent, every store. It plans first, shows evidence, and packs
           risky moves as decisions.
         </p>
       </header>
 
-      <Card className="flex min-h-0 flex-1 flex-col">
+      <Card className="gap-0 py-0" aria-label="Conversation with the agent">
+        {/* Transcript — a bounded record, scrolled to newest */}
         <div
           ref={scroller}
-          className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4"
+          tabIndex={0}
           aria-live="polite"
+          className="flex max-h-[34rem] min-h-56 flex-col gap-4 overflow-y-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset sm:p-5 [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:w-1.5"
         >
           {chat.map((m) =>
             m.role === "merchant" ? (
-              <div key={m.id} className="flex justify-end">
-                <div className="max-w-[85%] rounded-xl rounded-br-sm border bg-primary px-3.5 py-2 text-sm text-primary-foreground">
+              <div key={m.id} className="flex flex-col items-end gap-1">
+                <div className="max-w-[85%] rounded-xl bg-secondary px-3.5 py-2.5 text-sm leading-relaxed text-secondary-foreground">
                   {m.text}
                 </div>
+                <p className="pr-1 font-mono text-xs text-muted-foreground">
+                  {m.id}
+                </p>
               </div>
             ) : (
               <AgentMessage
@@ -138,7 +149,13 @@ export function ChatSection() {
             ),
           )}
           {chatThinking && (
-            <div className="flex items-center gap-2 pl-8 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span
+                className="flex h-6 w-6 items-center justify-center rounded-md border bg-card"
+                aria-hidden
+              >
+                <Terminal className="h-3.5 w-3.5 text-primary" />
+              </span>
               <motion.span
                 animate={{ opacity: [1, 0.35, 1] }}
                 transition={{ repeat: Infinity, duration: 1.1 }}
@@ -149,9 +166,10 @@ export function ChatSection() {
           )}
         </div>
 
-        <div className="border-t p-3">
+        {/* Composer */}
+        <div className="border-t p-4 sm:p-5">
           <div
-            className="mb-2 flex flex-wrap gap-1.5"
+            className="mb-3 flex flex-wrap gap-1.5"
             role="group"
             aria-label="Pin context for the agent"
           >
@@ -163,10 +181,10 @@ export function ChatSection() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => toggleContext(c.id)}
-                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[11px] transition-colors ${
+                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     active
-                      ? "border-primary/60 bg-primary/10 font-medium text-primary ring-1 ring-primary/40"
-                      : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+                      : "bg-card text-muted-foreground hover:border-foreground/25 hover:text-foreground"
                   }`}
                 >
                   {c.glyph && (
@@ -180,10 +198,11 @@ export function ChatSection() {
             })}
           </div>
 
-          <div className="mb-2 flex flex-wrap gap-1.5">
+          <div className="mb-3 flex flex-wrap gap-1.5">
             {suggestions.map((s) => (
               <button
                 key={s}
+                type="button"
                 onClick={() =>
                   sendChat(
                     s,
@@ -191,7 +210,7 @@ export function ChatSection() {
                     context.length > 0 ? contextLabels(context) : undefined,
                   )
                 }
-                className="rounded-full border bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                className="min-h-11 rounded-full border bg-card px-3.5 text-xs text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 {s}
               </button>
@@ -204,20 +223,25 @@ export function ChatSection() {
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Tell the agent what you need…"
               aria-label="Message the agent"
-              className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
             />
-            <Button type="submit" size="icon" disabled={!draft.trim()}>
-              <Send className="h-4 w-4" />
+            <Button
+              type="submit"
+              size="icon"
+              className="h-11 w-11"
+              disabled={!draft.trim()}
+            >
+              <Send className="h-4 w-4" aria-hidden />
               <span className="sr-only">Send</span>
             </Button>
           </form>
 
-          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-            <p className="text-[10px] text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-xs text-muted-foreground">
               Plans → evidence → decisions. The agent never changes a store
               without your checkbox on the frontier.
             </p>
-            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch
                 checked={planFirst}
                 onCheckedChange={setPlanFirst}
@@ -256,18 +280,37 @@ function AgentMessage({
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[88%] space-y-2">
+      <div className="flex max-w-[88%] flex-col gap-2">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md border bg-card">
+          <span
+            className="flex h-6 w-6 items-center justify-center rounded-md border bg-card"
+            aria-hidden
+          >
             <Terminal className="h-3.5 w-3.5 text-primary" />
           </span>
           <span className="text-xs font-medium text-muted-foreground">
             orchestrator
           </span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {m.id}
+          </span>
         </div>
-        <div className="rounded-xl rounded-bl-sm border bg-card px-3.5 py-2.5 text-sm leading-relaxed">
+        <div className="rounded-xl border bg-card px-3.5 py-2.5 text-sm leading-relaxed">
           {m.text}
         </div>
+
+        {m.evidence && m.evidence.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pl-8">
+            {m.evidence.map((e) => (
+              <span
+                key={e}
+                className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+              >
+                {e}
+              </span>
+            ))}
+          </div>
+        )}
 
         {m.diff && (
           <div className="pt-0.5">
@@ -279,7 +322,7 @@ function AgentMessage({
           <button
             type="button"
             onClick={() => onOpenLink(m.diffLink!.section)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            className="inline-flex items-center gap-1 rounded-sm text-xs font-medium text-primary underline-offset-4 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {m.diffLink.label}
             <ArrowRight className="h-3 w-3" aria-hidden />

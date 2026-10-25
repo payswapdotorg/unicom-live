@@ -88,10 +88,16 @@ import {
   type Verbosity,
 } from "@/lib/product/data";
 
-// Settings — the zcode control surfaces: identity, the approval matrix,
-// automations, slash commands, hooks, MCP servers, computer use, store
-// connections, notifications, data, and the danger zone. Everything the
-// agent may do is shaped here; nothing here is decorative.
+// Settings — the zcode control surfaces (redesign §7-4d): identity, the
+// approval matrix, automations, slash commands, hooks, MCP servers, computer
+// use, store connections, notifications, data, and the danger zone.
+// Everything the agent may do is shaped here; nothing here is decorative.
+// The 12-tab inventory and every control are frozen — this pass restyles the
+// scaffold, the tab chrome and the cards to the calmer discipline only.
+
+/** Thin custom scrollbar for bounded lists (the long-list law). */
+const THIN_SCROLL =
+  "[scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar]:w-1.5";
 
 const TABS = [
   {
@@ -187,19 +193,24 @@ export function SettingsSection() {
   const current = TABS.find((t) => t.id === tab)!;
 
   return (
-    <div className="space-y-6">
-      <header>
+    <div className="flex flex-col gap-6">
+      {/* Scaffold (§5) */}
+      <header className="flex flex-col gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          UNiCOM Commerce Workspace
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="max-w-2xl text-sm text-muted-foreground">
           Every guard, every schedule, every tool — the whole operating
           contract lives here.
         </p>
       </header>
 
-      {/* Mobile: sticky horizontal chip strip */}
+      {/* Mobile: sticky horizontal chip strip — the shell's scroll-row
+          pattern; quieter selected treatment (accent surface, not brand fill) */}
       <nav
         aria-label="Settings sections"
-        className="sticky top-[5.3rem] z-30 -mx-4 border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-6 sm:px-6 lg:hidden"
+        className="sticky top-[calc(3.5rem+2rem)] z-30 -mx-4 border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-6 sm:px-6 lg:hidden"
       >
         <div className="flex gap-1.5 overflow-x-auto pb-0.5">
           {TABS.map((t) => (
@@ -208,10 +219,10 @@ export function SettingsSection() {
               type="button"
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? "true" : undefined}
-              className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+              className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                 tab === t.id
-                  ? "border-primary/60 bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  ? "bg-accent font-semibold text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
               }`}
             >
               <t.icon className="h-3.5 w-3.5" />
@@ -222,25 +233,28 @@ export function SettingsSection() {
       </nav>
 
       <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
-        {/* Desktop: sticky tab rail */}
+        {/* Desktop: sticky tab rail — same selected treatment as the shell
+            sidebar (accent surface contrast, no brand-fill blocks) */}
         <nav
           aria-label="Settings sections"
           className="hidden lg:block"
         >
-          <div className="sticky top-[5.3rem] flex max-h-[calc(100vh-7rem)] flex-col gap-0.5 overflow-y-auto pr-1">
+          <div
+            className={`sticky top-[calc(3.5rem+2rem)] flex max-h-[calc(100vh-7rem)] flex-col gap-1 overflow-y-auto pr-1 ${THIN_SCROLL}`}
+          >
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
                 aria-current={tab === t.id ? "true" : undefined}
-                className={`flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-left text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+                className={`flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                   tab === t.id
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    ? "bg-accent font-semibold text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                 }`}
               >
-                <t.icon className="h-3.5 w-3.5 shrink-0" />
+                <t.icon className="h-4 w-4 shrink-0" />
                 {t.label}
               </button>
             ))}
@@ -281,9 +295,9 @@ export function SettingsSection() {
 
 function TabHeader({ title, desc }: { title: string; desc: string }) {
   return (
-    <header className="mb-5">
-      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">{desc}</p>
+    <header className="mb-5 flex flex-col gap-1">
+      <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+      <p className="text-sm text-muted-foreground">{desc}</p>
     </header>
   );
 }
@@ -340,7 +354,7 @@ function ToggleChip({
       type="button"
       onClick={onClick}
       aria-pressed={pressed}
-      className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${
+      className={`flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
         pressed
           ? "border-primary/60 bg-primary/10 font-medium text-primary"
           : "text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
@@ -441,7 +455,7 @@ function GeneralTab() {
                     setSettings({ model: m.id });
                     pushToast("Model switched", `${m.name} · ${m.tagline}.`);
                   }}
-                  className={`rounded-lg border p-4 text-left transition-colors ${
+                  className={`rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     active
                       ? "border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25"
                       : "hover:border-primary/40 hover:bg-accent"
@@ -524,7 +538,7 @@ function GeneralTab() {
                     setSettings({ verbosity: v.id });
                     pushToast("Verbosity updated", `${v.label} — ${v.hint}.`);
                   }}
-                  className={`flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm transition-colors ${
+                  className={`flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                     active
                       ? "border-primary/60 bg-primary/10 font-medium text-primary"
                       : "text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-foreground"
@@ -551,8 +565,8 @@ function PermissionsTab() {
 
   return (
     <>
-      <Card className="border-primary/25 bg-primary/[0.04]">
-        <CardContent className="flex items-start gap-3 p-4">
+      <Card>
+        <CardContent className="flex items-start gap-3 p-5">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <div>
             <p className="text-sm font-medium">The approval matrix.</p>
@@ -658,11 +672,13 @@ function AutomationsTab() {
               feed either way.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <Button className="h-11" onClick={() => setOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" /> New automation
           </Button>
         </CardHeader>
-        <CardContent className="space-y-1.5">
+        <CardContent
+          className={`max-h-96 space-y-1.5 overflow-y-auto pr-1 ${THIN_SCROLL}`}
+        >
           {settings.automations.length === 0 && (
             <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
               No automations yet — schedule a skill sweep and let the night
@@ -855,11 +871,13 @@ function CommandsTab() {
               the agent expands.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <Button className="h-11" onClick={() => setOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" /> New command
           </Button>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
+        <CardContent
+          className={`grid max-h-96 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 ${THIN_SCROLL}`}
+        >
           {settings.commands.map((c) => (
             <div
               key={c.id}
@@ -880,7 +898,7 @@ function CommandsTab() {
                 {c.description}
               </p>
               <Collapsible className="mt-2">
-                <CollapsibleTrigger className="flex min-h-8 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">
+                <CollapsibleTrigger className="flex min-h-11 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   Prompt body
                   <ChevronDown className="h-3 w-3 transition-transform data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
@@ -1025,11 +1043,13 @@ function HooksTab() {
               the named event, no matter which skill fired it.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <Button className="h-11" onClick={() => setOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" /> New hook
           </Button>
         </CardHeader>
-        <CardContent className="space-y-1.5">
+        <CardContent
+          className={`max-h-96 space-y-1.5 overflow-y-auto pr-1 ${THIN_SCROLL}`}
+        >
           {settings.hooks.length === 0 && (
             <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
               No hooks armed — the agent loop runs bare.
@@ -1189,11 +1209,13 @@ function McpTab() {
               agent may call, scoped to the stores you name.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <Button className="h-11" onClick={() => setOpen(true)}>
             <Plus className="mr-1 h-3.5 w-3.5" /> Add server
           </Button>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
+        <CardContent
+          className={`grid max-h-96 gap-3 overflow-y-auto pr-1 md:grid-cols-2 ${THIN_SCROLL}`}
+        >
           {settings.mcp.map((srv) => {
             const st = MCP_STATUS[srv.status];
             return (
@@ -1237,9 +1259,8 @@ function McpTab() {
                 <div className="mt-3 flex items-center justify-between gap-2">
                   {srv.status === "error" ? (
                     <Button
-                      size="sm"
                       variant="outline"
-                      className="h-9 border-red-500/50 text-red-600 dark:text-red-400"
+                      className="h-11 border-red-500/50 text-red-600 dark:text-red-400"
                       onClick={() => reconnectMcp(srv.id)}
                     >
                       <RefreshCw className="mr-1 h-3 w-3" />
@@ -1487,7 +1508,7 @@ function ComputerTab() {
                 cu.allowedDomains.map((d) => (
                   <span
                     key={d}
-                    className="flex min-h-9 items-center gap-1.5 rounded-full border bg-card px-3 font-mono text-[11px]"
+                    className="flex min-h-11 items-center gap-1.5 rounded-full border bg-card py-1 pl-3 pr-1.5 font-mono text-[11px]"
                   >
                     {d}
                     <button
@@ -1500,7 +1521,7 @@ function ComputerTab() {
                         });
                         pushToast("Domain removed", `${d} is off the list.`);
                       }}
-                      className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={`Remove ${d}`}
                     >
                       <X className="h-3 w-3" />
@@ -1539,20 +1560,22 @@ function StoresTab() {
               one row per store.
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
-              size="sm"
+              className="h-11"
               variant="outline"
               onClick={syncAllStores}
             >
               <RefreshCw className="mr-1 h-3.5 w-3.5" /> Sync all
             </Button>
-            <Button size="sm" onClick={() => setConnectOpen(true)}>
+            <Button className="h-11" onClick={() => setConnectOpen(true)}>
               <Plus className="mr-1 h-3.5 w-3.5" /> Connect store
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-1.5">
+        <CardContent
+          className={`max-h-96 space-y-1.5 overflow-y-auto pr-1 ${THIN_SCROLL}`}
+        >
           {stores.length === 0 && (
             <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
               No stores connected — the ring is quiet. Connect one and the
@@ -1590,9 +1613,8 @@ function StoresTab() {
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
-                    size="sm"
                     variant="ghost"
-                    className="h-9 px-2.5"
+                    className="h-11 w-11"
                     onClick={() => syncStore(s.id)}
                     aria-label={`Sync ${s.name}`}
                   >
@@ -1600,9 +1622,8 @@ function StoresTab() {
                   </Button>
                   {s.health !== "healthy" && (
                     <Button
-                      size="sm"
                       variant="ghost"
-                      className="h-9 px-2.5"
+                      className="h-11 w-11"
                       onClick={() => reconnectStore(s.id)}
                       aria-label={`Reconnect ${s.name}`}
                     >
@@ -1634,9 +1655,8 @@ function RevokeStoreDialog({
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button
-          size="sm"
           variant="ghost"
-          className="h-9 px-2.5 text-destructive hover:text-destructive"
+          className="h-11 w-11 text-destructive hover:text-destructive"
           aria-label={`Revoke ${name}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -1683,7 +1703,7 @@ function NotificationsTab() {
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="brief-time" className="text-xs font-medium">
-            Morning brief lands at
+            Today&apos;s brief lands at
           </Label>
           <Input
             id="brief-time"
@@ -1695,7 +1715,7 @@ function NotificationsTab() {
             onBlur={() =>
               pushToast(
                 "Brief time set",
-                `The morning brief now lands at ${n.morningBriefTime}.`,
+                `Today's brief now lands at ${n.morningBriefTime}.`,
               )
             }
             className="w-36 font-mono"
@@ -1704,13 +1724,13 @@ function NotificationsTab() {
         <div className="divide-y">
           <SwitchRow
             id="ntf-brief"
-            label="Morning brief"
+            label="Today's brief"
             helper="The overnight report — checks, numbers, what needs you."
             checked={n.morningBriefEnabled}
             onCheckedChange={(v) => {
               setNotifications({ morningBriefEnabled: v });
               pushToast(
-                v ? "Morning brief on" : "Morning brief off",
+                v ? "Today's brief on" : "Today's brief off",
                 v
                   ? `Lands daily at ${n.morningBriefTime}.`
                   : "No daily report — the watch still runs.",
@@ -1793,7 +1813,7 @@ function DataTab() {
                     setDataSettings({ retentionDays: r.days });
                     pushToast("Retention set", `${r.label} — ${r.hint}.`);
                   }}
-                  className={`rounded-lg border p-4 text-left transition-colors ${
+                  className={`rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     active
                       ? "border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25"
                       : "hover:border-primary/40 hover:bg-accent"
@@ -1847,6 +1867,7 @@ function DataTab() {
         <CardContent>
           <Button
             variant="outline"
+            className="h-11"
             onClick={() =>
               pushToast(
                 "Export queued",
@@ -1871,8 +1892,8 @@ function DangerTab() {
 
   return (
     <>
-      <Card className="border-amber-500/40 bg-amber-500/[0.04]">
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+      <Card className="border-l-[3px] border-l-amber-500">
+        <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
             <p className="flex items-center gap-2 text-sm font-medium">
               <Pause className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -1887,9 +1908,8 @@ function DangerTab() {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
-                size="sm"
                 variant="outline"
-                className="shrink-0 border-amber-500/50 text-amber-700 dark:text-amber-400"
+                className="h-11 shrink-0 border-amber-500/50 text-amber-700 dark:text-amber-400"
               >
                 Pause everything
               </Button>
@@ -1918,7 +1938,7 @@ function DangerTab() {
       </Card>
 
       <Card className="border-destructive/40">
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
             <p className="flex items-center gap-2 text-sm font-medium">
               <Unplug className="h-4 w-4 text-destructive" />
@@ -1932,9 +1952,8 @@ function DangerTab() {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
-                size="sm"
                 variant="outline"
-                className="shrink-0 border-destructive/50 text-destructive hover:text-destructive"
+                className="h-11 shrink-0 border-destructive/50 text-destructive hover:text-destructive"
               >
                 Disconnect all
               </Button>
@@ -1965,7 +1984,7 @@ function DangerTab() {
       </Card>
 
       <Card className="border-destructive/40">
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
             <p className="flex items-center gap-2 text-sm font-medium">
               <RotateCcw className="h-4 w-4 text-destructive" />
@@ -1978,7 +1997,7 @@ function DangerTab() {
           </div>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button size="sm" variant="destructive" className="shrink-0">
+              <Button variant="destructive" className="h-11 shrink-0">
                 Reset workspace
               </Button>
             </AlertDialogTrigger>

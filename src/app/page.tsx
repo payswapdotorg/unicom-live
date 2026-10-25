@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   CheckSquare,
-  Ellipsis,
-  LayoutDashboard,
+  LayoutGrid,
   ListTodo,
   MessageSquare,
   Moon,
@@ -19,17 +18,10 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { useProduct, type Section } from "@/lib/product/store";
 import { HeartbeatStrip } from "@/components/product/heartbeat";
-import { CommandSection } from "@/components/product/command";
+import { OverviewSection } from "@/components/product/overview";
 import { StoresSection } from "@/components/product/stores";
 import { MissionsSection } from "@/components/product/missions";
 import { ChatSection } from "@/components/product/chat";
@@ -40,35 +32,47 @@ import { NewTaskSection } from "@/components/product/newtask";
 import { SettingsSection } from "@/components/product/settings";
 import { CommandPalette } from "@/components/product/palette";
 
+// The console shell (spec §4): skip link → topbar (mark + wordmark + framing
+// chip + live badge + ⌘K + theme + New task) → the resident-watch heartbeat
+// strip → the desktop w-64 iconed sidebar (Workspace group, pinned Settings,
+// the dashed trust-contract card) or the mobile horizontal scroll nav row →
+// the max-w-3xl content column → the honest footer (durability fact + counts
+// from the loaded state only). The section switch mechanism, the toast-queue
+// drain, the ⌘K palette and the boot hydration are all unchanged (spec §1).
+
+/** The 7 workspace sections + pinned Settings (spec §2 order). */
 const NAV: { id: Section; label: string; icon: typeof Radar }[] = [
-  { id: "command", label: "Command", icon: LayoutDashboard },
-  { id: "stores", label: "Stores", icon: Store },
+  { id: "overview", label: "Overview", icon: LayoutGrid },
   { id: "missions", label: "Missions", icon: ListTodo },
   { id: "chat", label: "Commander", icon: MessageSquare },
   { id: "decisions", label: "Decisions", icon: CheckSquare },
+  { id: "stores", label: "Stores", icon: Store },
   { id: "watch", label: "Watch", icon: Radar },
   { id: "skills", label: "Skills", icon: Puzzle },
-  { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const RAIL_GROUPS: { label: string; ids: NavSection[] }[] = [
-  { label: "Operate", ids: ["command", "stores", "missions"] },
-  { label: "Safety", ids: ["chat", "decisions", "watch"] },
-  { label: "System", ids: ["skills", "settings"] },
-];
-
-const MORE_IDS: NavSection[] = ["chat", "decisions", "watch", "skills", "settings"];
+const SETTINGS_NAV: { id: Section; label: string; icon: typeof Radar } = {
+  id: "settings",
+  label: "Settings",
+  icon: Settings,
+};
 
 type NavSection = Exclude<Section, "newtask">;
 
-const navOf = (id: NavSection) => NAV.find((n) => n.id === id)!;
-
 export default function Home() {
-  const { section, setSection, decisions, toastQueue, stores, hydrate } =
-    useProduct();
+  const {
+    section,
+    setSection,
+    decisions,
+    stores,
+    missions,
+    toastQueue,
+    hydrate,
+    live,
+    hydrating,
+  } = useProduct();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
-  const [moreOpen, setMoreOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // drain the store's toast queue → shadcn toasts
@@ -85,30 +89,58 @@ export default function Home() {
     void hydrate();
   }, [hydrate]);
 
-  const moreActive = (MORE_IDS as Section[]).includes(section);
+  // Honest footer (spec §4.6) — the durability fact from `live`, the
+  // counts line only from the loaded state.
+  const durability = live
+    ? "Missions, decisions and chat are persisted by the workspace backend and survive reloads."
+    : "Backend unreachable — running on demo data; changes stay in this session.";
+  const countsLine = hydrating
+    ? "Workspace counts load with the backend."
+    : `${stores.length} stores · ${missions.length} missions · ${decisions.length} decisions open — counted from the loaded workspace state.`;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      {/* Skip link — the first focusable element (spec §4.1) */}
+      <a
+        href="#console-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2.5 focus:text-sm focus:font-medium focus:text-primary-foreground"
+      >
+        Skip to main content
+      </a>
+
+      {/* Topbar (spec §4.2) */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
           <button
-            onClick={() => setSection("command")}
-            className="flex items-center gap-2.5"
+            onClick={() => setSection("overview")}
+            className="flex min-h-11 items-center gap-2.5 rounded-md px-1"
             aria-label="UNiCOM home"
           >
             <span
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-primary font-mono text-sm font-bold text-primary-foreground"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#131211]"
               aria-hidden
             >
-              U
+              <svg
+                viewBox="0 0 32 32"
+                className="h-7 w-7"
+                aria-hidden
+                focusable="false"
+              >
+                <circle
+                  cx="16"
+                  cy="16"
+                  r="8.5"
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="2.4"
+                />
+                <circle cx="22.5" cy="9.5" r="2.6" fill="#10b981" />
+              </svg>
             </span>
-            <span className="hidden font-semibold tracking-tight sm:block">
-              UNiCOM
-            </span>
+            <span className="font-semibold tracking-tight">UNiCOM</span>
           </button>
-          <span className="hidden text-xs text-muted-foreground md:block">
-            multi-store command center
+          <span className="hidden rounded-md border px-2 py-0.5 text-xs font-medium text-muted-foreground sm:block">
+            Commerce Workspace
           </span>
 
           <div className="ml-auto flex items-center gap-2">
@@ -128,7 +160,7 @@ export default function Home() {
               onClick={() => setPaletteOpen(true)}
               aria-label="Open command palette"
               aria-keyshortcuts="Meta+K Control+K"
-              className="h-9 gap-2 px-2.5"
+              className="h-11 gap-2 px-2.5"
             >
               <Search className="h-4 w-4" aria-hidden />
               <kbd
@@ -143,11 +175,16 @@ export default function Home() {
               size="icon"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               aria-label="Toggle theme"
+              className="h-11 w-11"
             >
               <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             </Button>
-            <Button size="sm" onClick={() => setSection("newtask")}>
+            <Button
+              size="sm"
+              className="h-11"
+              onClick={() => setSection("newtask")}
+            >
               <Plus className="mr-1 h-4 w-4" />
               <span className="hidden sm:inline">New task</span>
               <span className="sm:hidden">New</span>
@@ -157,19 +194,49 @@ export default function Home() {
         <HeartbeatStrip />
       </header>
 
-      {/* Body: rail + content */}
+      {/* Mobile section nav — the payswap horizontal scroll row (spec §4.5);
+          replaces the bottom bar + FAB + More sheet entirely */}
+      <nav
+        aria-label="Workspace sections"
+        className="flex gap-1 overflow-x-auto border-b bg-background px-3 py-2 lg:hidden"
+      >
+        {([...NAV, SETTINGS_NAV] as { id: NavSection; label: string; icon: typeof Radar }[]).map(
+          (n) => {
+            const active = section === n.id;
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setSection(n.id)}
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm transition-colors ${
+                  active
+                    ? "bg-accent font-semibold text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <n.icon className="h-4 w-4" aria-hidden />
+                {n.label}
+                {n.id === "decisions" && decisions.length > 0 && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-amber-950">
+                    {decisions.length}
+                  </span>
+                )}
+              </button>
+            );
+          },
+        )}
+      </nav>
+
+      {/* Body: rail + content (spec §4.4) */}
       <div className="flex flex-1">
-        {/* Desktop rail */}
+        {/* Desktop sidebar */}
         <nav
-          className="sticky top-[5.3rem] hidden h-fit w-56 shrink-0 flex-col gap-1 border-r bg-sidebar p-3 lg:flex"
-          aria-label="Primary"
+          aria-label="Workspace sections"
+          className="sticky top-[calc(3.5rem+2rem)] hidden h-fit w-64 shrink-0 flex-col border-r bg-sidebar px-3 py-4 lg:flex"
         >
           <Button
-            className={`mb-3 w-full justify-start ${
-              section === "newtask"
-                ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-sidebar"
-                : ""
-            }`}
+            className="mb-3 min-h-11 w-full justify-start"
             onClick={() => setSection("newtask")}
             aria-current={section === "newtask" ? "page" : undefined}
           >
@@ -177,43 +244,51 @@ export default function Home() {
             New task
           </Button>
 
-          {RAIL_GROUPS.map((g) => (
-            <div key={g.label} className="mb-2">
-              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {g.label}
-              </p>
-              <div className="flex flex-col gap-1">
-                {g.ids.map((id) => {
-                  const n = navOf(id);
-                  return (
-                    <RailButton
-                      key={id}
-                      active={section === id}
-                      label={n.label}
-                      icon={<n.icon className="h-4 w-4" />}
-                      badge={id === "decisions" ? decisions.length : 0}
-                      onClick={() => setSection(id)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <p className="px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Workspace
+          </p>
+          <div className="mt-1 flex flex-col gap-1">
+            {NAV.map((n) => (
+              <RailButton
+                key={n.id}
+                active={section === n.id}
+                label={n.label}
+                icon={<n.icon className="h-4 w-4" />}
+                badge={n.id === "decisions" ? decisions.length : 0}
+                onClick={() => setSection(n.id)}
+              />
+            ))}
+          </div>
 
-          <div className="mt-2 rounded-lg border border-dashed p-3 text-[10px] leading-relaxed text-muted-foreground">
+          <div className="mt-1 border-t" aria-hidden />
+          <div className="mt-1 flex flex-col gap-1">
+            <RailButton
+              active={section === SETTINGS_NAV.id}
+              label={SETTINGS_NAV.label}
+              icon={<SETTINGS_NAV.icon className="h-4 w-4" />}
+              badge={0}
+              onClick={() => setSection(SETTINGS_NAV.id)}
+            />
+          </div>
+
+          <div className="mt-auto rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
             Every agent action leaves evidence. Every risky action needs your
-            checkbox. That&apos;s the whole contract.
+            checkbox. That's the whole contract.
           </div>
         </nav>
 
-        {/* Content */}
-        <main className="min-w-0 flex-1 px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
-          <div className="mx-auto max-w-6xl">
-            {section === "command" && <CommandSection />}
-            {section === "stores" && <StoresSection />}
+        {/* Content — the max-w-3xl payswap column */}
+        <main
+          id="console-main"
+          tabIndex={-1}
+          className="min-w-0 flex-1 scroll-mt-24 px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pb-10"
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-6">
+            {section === "overview" && <OverviewSection />}
             {section === "missions" && <MissionsSection />}
             {section === "chat" && <ChatSection />}
             {section === "decisions" && <DecisionsSection />}
+            {section === "stores" && <StoresSection />}
             {section === "watch" && <WatchSection />}
             {section === "skills" && <SkillsSection />}
             {section === "newtask" && <NewTaskSection />}
@@ -222,154 +297,21 @@ export default function Home() {
         </main>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:hidden"
-        aria-label="Primary mobile"
-      >
-        <MobileTabButton
-          id="command"
-          active={section === "command"}
-          onClick={() => setSection("command")}
-        />
-        <MobileTabButton
-          id="stores"
-          active={section === "stores"}
-          onClick={() => setSection("stores")}
-        />
-
-        {/* Elevated center: New task */}
-        <div className="relative flex items-end justify-center">
-          <button
-            type="button"
-            onClick={() => setSection("newtask")}
-            aria-label="New task"
-            aria-current={section === "newtask" ? "page" : undefined}
-            className={`flex h-12 w-12 -translate-y-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-              section === "newtask" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-background" : ""
-            }`}
-          >
-            <Plus className="h-5 w-5" />
-          </button>
-        </div>
-
-        <MobileTabButton
-          id="missions"
-          active={section === "missions"}
-          onClick={() => setSection("missions")}
-        />
-        <button
-          type="button"
-          onClick={() => setMoreOpen(true)}
-          aria-label="More sections"
-          aria-current={moreActive ? "page" : undefined}
-          className={`relative flex flex-col items-center gap-0.5 py-2 text-[9px] font-medium transition-colors ${
-            moreActive ? "text-primary" : "text-muted-foreground"
-          }`}
-        >
-          <span className="relative">
-            <Ellipsis className="h-4 w-4" />
-            {decisions.length > 0 && (
-              <span className="absolute -right-2 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-bold text-amber-950">
-                {decisions.length}
-              </span>
-            )}
-          </span>
-          <span className="truncate">More</span>
-        </button>
-      </nav>
-
-      {/* Mobile: More sheet */}
-      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent
-          side="bottom"
-          className="pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        >
-          <SheetHeader className="pb-1">
-            <SheetTitle className="text-left text-base">More</SheetTitle>
-            <SheetDescription className="sr-only">
-              The rest of the console — Commander chat, decisions, the watch
-              feed, skills, and settings.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-1">
-            {MORE_IDS.map((id) => {
-              const n = navOf(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    setSection(id);
-                    setMoreOpen(false);
-                  }}
-                  aria-current={section === id ? "page" : undefined}
-                  className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
-                    section === id
-                      ? "bg-primary/10 text-primary"
-                      : "text-foreground hover:bg-accent"
-                  }`}
-                >
-                  <n.icon className="h-4 w-4" />
-                  <span className="flex-1 text-left">{n.label}</span>
-                  {id === "decisions" && decisions.length > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-amber-950">
-                      {decisions.length}
-                    </span>
-                  )}
-                  {section === id && (
-                    <span className="font-mono text-[10px] text-primary">
-                      here
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </SheetContent>
-      </Sheet>
-
       {/* ⌘K command palette (R-B2) */}
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
-      {/* Footer */}
-      <footer className="mt-auto border-t bg-sidebar px-4 py-3 pb-16 sm:px-6 lg:pb-3">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-          <span>
-            UNiCOM · every action leaves evidence · nothing risky ships
-            without your checkbox
-          </span>
-          <span className="font-mono">
-            watch ring green · powered by zcode
-          </span>
+      {/* Honest footer (spec §4.6) */}
+      <footer className="mt-auto border-t bg-sidebar px-4 py-3 pb-[env(safe-area-inset-bottom)] text-xs text-muted-foreground sm:px-6 lg:pb-3">
+        <div className="mx-auto flex max-w-3xl flex-col gap-1">
+          <p>
+            UNiCOM Commerce Workspace — {durability} No live store corridors
+            are connected; nothing here executes or simulates real store
+            writes.
+          </p>
+          <p>{countsLine}</p>
         </div>
       </footer>
     </div>
-  );
-}
-
-function MobileTabButton({
-  id,
-  active,
-  onClick,
-}: {
-  id: NavSection;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const n = navOf(id);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={`relative flex flex-col items-center gap-0.5 py-2 text-[9px] font-medium transition-colors ${
-        active ? "text-primary" : "text-muted-foreground"
-      }`}
-    >
-      <n.icon className="h-4 w-4" />
-      <span className="truncate">{n.label}</span>
-    </button>
   );
 }
 
@@ -389,12 +331,12 @@ function RailButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active
-          ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/30"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-      }`}
       aria-current={active ? "page" : undefined}
+      className={`flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+        active
+          ? "bg-accent text-accent-foreground"
+          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+      }`}
     >
       {icon}
       <span className="flex-1 text-left">{label}</span>

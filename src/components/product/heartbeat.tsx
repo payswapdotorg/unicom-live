@@ -28,7 +28,7 @@ export function HeartbeatStrip() {
 
   return (
     <div
-      className="flex items-center gap-4 overflow-x-auto border-b bg-sidebar px-4 py-1.5 font-mono text-[11px] tracking-tight text-muted-foreground sm:px-6"
+      className="flex h-8 items-center gap-4 overflow-x-auto border-b bg-muted/40 px-4 font-mono text-[11px] tracking-tight text-muted-foreground sm:px-6"
       role="status"
       aria-label="Live watch telemetry"
     >

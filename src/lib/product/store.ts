@@ -41,11 +41,11 @@ import {
 } from "./data";
 
 export type Section =
-  | "command"
-  | "stores"
+  | "overview"
   | "missions"
   | "chat"
   | "decisions"
+  | "stores"
   | "watch"
   | "skills"
   | "newtask"
@@ -244,7 +244,7 @@ const seedChat = (): ChatMessage[] => [
 ];
 
 export const useProduct = create<ProductState>((set, get) => ({
-  section: "command",
+  section: "overview",
   stores: SEED_STORES,
   connecting: null,
   missions: SEED_MISSIONS,

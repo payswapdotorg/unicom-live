@@ -15,16 +15,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UNiCOM — Multi-Store Command Center",
+  title: "UNiCOM — Commerce Command Center",
   description:
-    "Connect every store you run. Command them all with agents that watch, plan, act — and always leave evidence. Powered by zcode.",
-  keywords: ["ecommerce", "multi-store", "AI agents", "Shopify", "WooCommerce", "Etsy", "command center"],
+    "Connect every storefront you run — online and in-person. Command them all with agents that watch, plan, act — and always leave evidence. Powered by zcode.",
+  keywords: ["ecommerce", "local commerce", "multi-store", "AI agents", "Shopify", "WooCommerce", "Etsy", "command center"],
   icons: {
     icon: "/logo.svg",
   },
   openGraph: {
-    title: "UNiCOM — Multi-Store Command Center",
-    description: "One agentic command center for every store you run.",
+    title: "UNiCOM — Commerce Command Center",
+    description: "One agentic command center for every storefront you run — online and in-person.",
     siteName: "UNiCOM",
     type: "website",
   },
