@@ -204,6 +204,7 @@ export function toWatchUI(row: WatchEventRow): WatchEvent {
     kind: row.kind as WatchEvent["kind"],
     actor: row.actor,
     text: row.text,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 

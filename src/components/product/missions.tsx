@@ -32,6 +32,7 @@ import {
   type ProjectGroup,
   type ReplayEvent,
   type StoreConnection,
+  type WatchEvent,
   SEED_REPLAYS,
   platformOf,
   storeName,
@@ -40,9 +41,10 @@ import {
 // Missions — the multi-step task board (redesign §7-4d). Project groups file
 // their missions under tinted rails, one-offs land below, and every card
 // carries its lane chips, its evidence drawer and a session replay you can
-// step through. Nothing is claimed without a record behind it. The empty
-// state is honest: zero missions means nothing has been commissioned yet —
-// the record starts with the first task.
+// step through. Every lane chip opens a worker drilldown — the worker's
+// state, evidence and ring record, one worker at a time. Nothing is claimed
+// without a record behind it. The empty state is honest: zero missions means
+// nothing has been commissioned yet — the record starts with the first task.
 
 /** Thin custom scrollbar for bounded lists (the long-list law). */
 const THIN_SCROLL =
@@ -69,6 +71,73 @@ function replayFor(m: Mission): MissionReplay {
       },
     ],
   };
+}
+
+// ——— Worker drilldown (FE2 §3.1 — the zcode SubagentDrilldown, commerce) ———
+
+/** The zcode worker-state taxonomy, mapped honestly from lane.status —
+ *  lanes only ever carry running | in-review | done today. */
+const WORKER_STATE: Record<
+  MissionLane["status"],
+  { label: string; cls: string }
+> = {
+  running: { label: "Running", cls: "border-primary/40 text-primary" },
+  "in-review": {
+    label: "Waiting",
+    cls: "border-amber-500/50 text-amber-600 dark:text-amber-400",
+  },
+  done: { label: "Completed", cls: "border-primary/40 bg-primary/10 text-primary" },
+};
+
+/** Worker states reference — the full taxonomy so it reads whole. The live
+ *  badge on a drilldown is the honest one; this card is never live data. */
+const WORKER_STATES: { term: string; line: string }[] = [
+  { term: "Running", line: "Executing its lane right now." },
+  { term: "Waiting", line: "Holding for a review or an approval." },
+  { term: "Blocked", line: "Waiting on another lane or an external system." },
+  { term: "Completed", line: "Finished with evidence sealed." },
+  { term: "Failed", line: "Ended in error — the ring re-dispatches when safe." },
+  { term: "Cancelled", line: "Stopped by you or by a guardrail." },
+  { term: "Lost", line: "Contact dropped — the record keeps its last evidence." },
+];
+
+/** A row of a worker's ring record — from the global watch stream or the
+ *  mission's session replay. Both are real records; nothing is synthesized. */
+type RingRow = { id: string; ts: string; kind: string; text: string };
+
+const RING_KIND_LABEL: Record<string, string> = {
+  heartbeat: "heartbeat",
+  anomaly: "anomaly",
+  heal: "self-heal",
+  review: "review",
+  dispatch: "dispatch",
+  tool: "tool",
+  evidence: "evidence",
+  "approval-wait": "approval-wait",
+  resume: "resume",
+  done: "done",
+};
+
+/** The worker's slice of the ring record, newest first. */
+function ringRowsFor(
+  worker: string,
+  mission: Mission,
+  watchEvents: WatchEvent[],
+): RingRow[] {
+  const rows: RingRow[] = [
+    ...watchEvents
+      .filter((e) => e.actor === worker)
+      .map((e) => ({ id: e.id, ts: e.ts, kind: e.kind, text: e.text })),
+    ...replayFor(mission).events
+      .filter((e) => e.actor === worker)
+      .map((e, i) => ({
+        id: `${mission.id}-replay-${i}`,
+        ts: e.ts,
+        kind: e.kind,
+        text: e.text,
+      })),
+  ];
+  return rows.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
 }
 
 export function MissionsSection() {
@@ -226,6 +295,9 @@ function MissionCard({
   onEvidence: () => void;
 }) {
   const [replayOpen, setReplayOpen] = useState(false);
+  // one drilldown open per mission — clicking a chip swaps, clicking again
+  // closes (FE2 §3.1)
+  const [openLane, setOpenLane] = useState<string | null>(null);
   const replay = replayFor(m);
 
   return (
@@ -283,7 +355,16 @@ function MissionCard({
 
           <div className="mt-4 grid gap-2 md:grid-cols-3">
             {m.lanes.map((l) => (
-              <LaneChip key={l.id} lane={l} />
+              <div key={l.id} className="flex min-w-0 flex-col">
+                <LaneChip
+                  lane={l}
+                  open={openLane === l.id}
+                  onToggle={() =>
+                    setOpenLane((v) => (v === l.id ? null : l.id))
+                  }
+                />
+                {openLane === l.id && <WorkerDrilldown lane={l} mission={m} />}
+              </div>
             ))}
           </div>
 
@@ -487,9 +568,26 @@ function MissionBadge({ status }: { status: Mission["status"] }) {
   );
 }
 
-function LaneChip({ lane }: { lane: MissionLane }) {
+// The lane chip doubles as the drilldown's control — full-width in its
+// grid cell, min-h-11, chevron affordance (the session-replay toggle
+// pattern from the same card).
+function LaneChip({
+  lane,
+  open,
+  onToggle,
+}: {
+  lane: MissionLane;
+  open: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <div className="rounded-lg border bg-card p-3">
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls={`${lane.id}-drilldown`}
+      className="flex min-h-11 w-full flex-col rounded-lg border bg-card p-3 text-left transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-xs font-medium">{lane.name}</p>
         <span
@@ -510,9 +608,144 @@ function LaneChip({ lane }: { lane: MissionLane }) {
           {lane.progress}%
         </span>
       </div>
-      <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">
-        worker {lane.worker}
-      </p>
+      <div className="mt-1.5 flex items-center gap-1">
+        <p className="truncate font-mono text-[10px] text-muted-foreground">
+          worker {lane.worker}
+        </p>
+        <ChevronDown
+          className={`ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+          aria-hidden
+        />
+      </div>
+    </button>
+  );
+}
+
+// The inline worker drilldown — worker header (taxonomy badge mapped from
+// lane.status), the lane's evidence chips verbatim, the worker's slice of
+// the ring record, and the worker-states reference card.
+function WorkerDrilldown({
+  lane,
+  mission,
+}: {
+  lane: MissionLane;
+  mission: Mission;
+}) {
+  const watchEvents = useProduct((s) => s.watchEvents);
+  const rows = ringRowsFor(lane.worker, mission, watchEvents);
+  const state = WORKER_STATE[lane.status];
+
+  return (
+    <div
+      id={`${lane.id}-drilldown`}
+      role="region"
+      aria-label={`${lane.name} — worker ${lane.worker}`}
+      className="mt-2 flex flex-col gap-3 rounded-lg border bg-muted/20 p-3"
+    >
+      {/* Worker header — mono id + taxonomy badge + the live progress */}
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs font-medium">
+            {lane.worker}
+          </span>
+          <Badge variant="outline" className={`text-[10px] ${state.cls}`}>
+            {state.label}
+          </Badge>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Progress value={lane.progress} className="h-1" />
+          <span className="font-mono text-[10px] text-muted-foreground">
+            {lane.progress}%
+          </span>
+        </div>
+      </div>
+
+      {/* Evidence — the lane's chips, verbatim */}
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
+          Evidence
+        </p>
+        <ul className="mt-1.5 space-y-1.5">
+          {lane.evidence.map((e) => (
+            <li
+              key={e}
+              className="rounded border bg-card px-2 py-1 font-mono text-[11px] text-foreground/80"
+            >
+              {e}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Recent ring activity — this worker's events, newest first */}
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/80">
+          Recent ring activity
+        </p>
+        {rows.length === 0 ? (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            No ring events recorded for this worker yet.
+          </p>
+        ) : (
+          <div
+            role="list"
+            aria-label={`Ring events for ${lane.worker}, newest first`}
+            className={`mt-1.5 flex max-h-48 flex-col gap-1.5 overflow-y-auto pr-1 ${THIN_SCROLL}`}
+          >
+            {rows.map((r) => (
+              <div
+                key={r.id}
+                role="listitem"
+                className="rounded border bg-card px-2 py-1.5"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className="font-mono text-[9px]"
+                  >
+                    {RING_KIND_LABEL[r.kind] ?? r.kind}
+                  </Badge>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {r.ts}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-foreground/85">
+                  {r.text}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Worker states reference — the taxonomy, never live data */}
+      <div className="rounded-lg border p-3">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-xs font-semibold">Worker states</h4>
+          <Badge
+            variant="outline"
+            className="shrink-0 text-muted-foreground"
+          >
+            Reference
+          </Badge>
+        </div>
+        <dl className="mt-2 flex flex-col gap-1.5">
+          {WORKER_STATES.map((s) => (
+            <div key={s.term} className="flex flex-col gap-px">
+              <dt className="text-xs font-medium">{s.term}</dt>
+              <dd className="text-xs leading-relaxed text-muted-foreground">
+                {s.line}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+          Reference only — how worker states read. The live states come from
+          the ring record.
+        </p>
+      </div>
     </div>
   );
 }

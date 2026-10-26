@@ -5,6 +5,12 @@
 //   decisions → the operator frontier (approve/require-changes)
 //   evidence → evidence-first review (diffs, runs, durations)
 //   skills → pluggable capability packs
+// FE2: the model catalog (providers + capability rules) lives in ./models —
+// sourced verbatim from the zcode desktop repo's provider config.
+import {
+  defaultProviderConfigs,
+  type ModelProviderConfig,
+} from "./models";
 
 export type PlatformId =
   | "shopify"
@@ -170,6 +176,10 @@ export type WatchEvent = {
   kind: "heartbeat" | "anomaly" | "heal" | "review" | "dispatch";
   actor: string; // skill or agent
   text: string;
+  // FE2 (Usage): the date-stamped record — present on live rows (the DB
+  // timestamps every event incl. the seeded ones); absent only on static
+  // demo seeds. Usage surfaces count ONLY dated events — never fabricated.
+  createdAt?: string;
 };
 
 export type Skill = {
@@ -505,14 +515,12 @@ export const SEED_GROUPS: ProjectGroup[] = [
 ];
 
 // ——— Settings: model + permissions ———
+// FE2: the full model catalog (GLM-5.3, GLM-5.3-Flash, … the zcode lineup)
+// lives in ./models; `model` here is a catalog id string, `effort` is a
+// reasoning level, and `models` is the configured provider list.
 
-export type ModelId = "glm-4.7" | "glm-4.7-air" | "glm-4.6";
-
-export const MODEL_CARDS: { id: ModelId; name: string; tagline: string }[] = [
-  { id: "glm-4.7", name: "GLM-4.7", tagline: "Flagship · deep reasoning (recommended)" },
-  { id: "glm-4.7-air", name: "GLM-4.7-Air", tagline: "Fast lane · quick sweeps" },
-  { id: "glm-4.6", name: "GLM-4.6", tagline: "Stable · battle-tested" },
-];
+export const MODEL_SETTINGS_SOURCE =
+  "Catalog verbatim from the zcode desktop app (rev 33).";
 
 export type PermissionFamily =
   | "store-reads"
@@ -649,8 +657,12 @@ export type DataSettings = {
 export type SettingsState = {
   agentName: string;
   agentTone: AgentTone;
-  model: ModelId;
-  reasoning: number; // 1–5
+  /** Catalog model id ("GLM-5.3", …) — the workspace default for new missions. */
+  model: string;
+  /** Reasoning effort for the default model ("max", "high", "enabled", …). */
+  effort: string;
+  /** Configured model providers (Z.ai + BigModel presets + custom). */
+  models: ModelProviderConfig[];
   verbosity: Verbosity;
   permissions: Record<PermissionFamily, PermissionPolicy>;
   automations: Automation[];
@@ -665,8 +677,9 @@ export type SettingsState = {
 export const SEED_SETTINGS: SettingsState = {
   agentName: "Atlas",
   agentTone: "warm-professional",
-  model: "glm-4.7",
-  reasoning: 4,
+  model: "GLM-5.3",
+  effort: "max",
+  models: defaultProviderConfigs(),
   verbosity: "balanced",
   permissions: {
     "store-reads": "auto",

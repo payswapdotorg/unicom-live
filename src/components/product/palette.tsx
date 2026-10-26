@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   ListTodo,
   MessageSquare,
+  Package,
   Plug,
   Puzzle,
   Radar,
@@ -50,6 +51,7 @@ export function CommandPalette({
   onOpenChange: (open: boolean) => void;
 }) {
   const setSection = useProduct((s) => s.setSection);
+  const setSettingsTab = useProduct((s) => s.setSettingsTab);
   const syncAllStores = useProduct((s) => s.syncAllStores);
   const watchEvents = useProduct((s) => s.watchEvents);
 
@@ -116,6 +118,15 @@ export function CommandPalette({
           <CommandItem onSelect={() => go("overview")}>
             <Sparkles className="h-4 w-4" />
             Open today's brief
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setSettingsTab("models");
+              go("settings");
+            }}
+          >
+            <Package className="h-4 w-4" />
+            Model settings
           </CommandItem>
         </CommandGroup>
 

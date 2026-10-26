@@ -1,22 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  ArrowLeft,
+  ArrowUpRight,
   Bell,
   CalendarClock,
+  ChartColumn,
   ChevronDown,
+  ChevronRight,
   Database,
+  EllipsisVertical,
+  Eye,
+  EyeOff,
   Globe,
   Info,
+  Lock,
   MonitorSmartphone,
+  Package,
   Pause,
+  Pencil,
   Plug,
   Plus,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Store,
   Terminal,
   Trash2,
@@ -59,6 +70,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -69,16 +86,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConnectDialog } from "@/components/product/stores";
+import { ModelPicker } from "@/components/product/model-picker";
 import { useProduct } from "@/lib/product/store";
 import {
   AGENT_TONE_OPTIONS,
   AUTOMATION_SCHEDULES,
   HOOK_EVENTS,
-  MODEL_CARDS,
   PERMISSION_FAMILIES,
   PERMISSION_POLICIES,
   platformOf,
@@ -87,6 +103,23 @@ import {
   type PermissionPolicy,
   type Verbosity,
 } from "@/lib/product/data";
+import {
+  CATALOG_MODELS,
+  PROVIDER_TEMPLATES,
+  effectiveEffort,
+  formatContextWindow,
+  isVisionModel,
+  modelRuleFor,
+  providerFromTemplate,
+  providerStatus,
+  templateById,
+  type CatalogModel,
+  type ModelApiFormat,
+  type ModelInput,
+  type ModelProviderConfig,
+  type ProviderStatus,
+  type ProviderTemplate,
+} from "@/lib/product/models";
 
 // Settings — the zcode control surfaces (redesign §7-4d): identity, the
 // approval matrix, automations, slash commands, hooks, MCP servers, computer
@@ -106,6 +139,13 @@ const TABS = [
     icon: SlidersHorizontal,
     title: "General",
     desc: "Who the agent is, which brain it runs on, and how much it says.",
+  },
+  {
+    id: "models",
+    label: "Models",
+    icon: Package,
+    title: "Model settings",
+    desc: "The brains your missions think with — configured once, available everywhere work is dispatched.",
   },
   {
     id: "permissions",
@@ -171,6 +211,13 @@ const TABS = [
     desc: "Retention, redaction, and your evidence export.",
   },
   {
+    id: "usage",
+    label: "Usage",
+    icon: ChartColumn,
+    title: "Usage",
+    desc: "What the ring actually did — counted from the local record, never estimated.",
+  },
+  {
     id: "danger",
     label: "Danger zone",
     icon: TriangleAlert,
@@ -189,7 +236,13 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function SettingsSection() {
-  const [tab, setTab] = useState<TabId>("general");
+  // FE2: the active tab lives in the store (settingsTab) so the palette and
+  // the model picker can deep-link into Model settings.
+  const settingsTab = useProduct((s) => s.settingsTab);
+  const setSettingsTab = useProduct((s) => s.setSettingsTab);
+  const tab = (TABS.find((t) => t.id === settingsTab)?.id ??
+    "general") as TabId;
+  const setTab = (id: TabId) => setSettingsTab(id);
   const current = TABS.find((t) => t.id === tab)!;
 
   return (
@@ -272,6 +325,7 @@ export function SettingsSection() {
             <TabHeader title={current.title} desc={current.desc} />
             <div className="space-y-6">
               {tab === "general" && <GeneralTab />}
+              {tab === "models" && <ModelsTab />}
               {tab === "permissions" && <PermissionsTab />}
               {tab === "automations" && <AutomationsTab />}
               {tab === "commands" && <CommandsTab />}
@@ -281,6 +335,7 @@ export function SettingsSection() {
               {tab === "stores" && <StoresTab />}
               {tab === "notifications" && <NotificationsTab />}
               {tab === "data" && <DataTab />}
+              {tab === "usage" && <UsageTab />}
               {tab === "danger" && <DangerTab />}
               {tab === "about" && <AboutTab />}
             </div>
@@ -367,10 +422,9 @@ function ToggleChip({
 
 // ——— General ———
 
-const REASONING_LABELS = ["", "snap", "quick", "steady", "thorough", "deep"];
 
 function GeneralTab() {
-  const { settings, setSettings, pushToast } = useProduct();
+  const { settings, setSettings, setSettingsTab, pushToast } = useProduct();
 
   return (
     <>
@@ -434,79 +488,40 @@ function GeneralTab() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Model</CardTitle>
-          <CardDescription>
-            The brain every worker runs on. Switch anytime — missions pick it
-            up on the next lane.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
+          <div>
+            <CardTitle className="text-base">Default model</CardTitle>
+            <CardDescription>
+              New missions start with this brain — set the default and its
+              effort in Model settings.
+            </CardDescription>
+          </div>
+          <Button
+            variant="ghost"
+            className="h-11 shrink-0 px-3 text-primary"
+            onClick={() => setSettingsTab("models")}
+          >
+            Manage
+            <ChevronRight className="ml-1 h-3.5 w-3.5" aria-hidden />
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Model">
-            {MODEL_CARDS.map((m) => {
-              const active = settings.model === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => {
-                    setSettings({ model: m.id });
-                    pushToast("Model switched", `${m.name} · ${m.tagline}.`);
-                  }}
-                  className={`rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    active
-                      ? "border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25"
-                      : "hover:border-primary/40 hover:bg-accent"
-                  }`}
-                >
-                  <p className="font-mono text-sm font-semibold">{m.name}</p>
-                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                    {m.tagline}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Reasoning effort</CardTitle>
-          <CardDescription>
-            How long the agent thinks before it speaks. Four is the sweet spot
-            for commerce work.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-4">
-            <Slider
-              value={[settings.reasoning]}
-              min={1}
-              max={5}
-              step={1}
-              onValueChange={(v) => setSettings({ reasoning: v[0] })}
-              onValueCommit={(v) =>
-                pushToast(
-                  "Reasoning set",
-                  `Effort ${v[0]} of 5 — ${REASONING_LABELS[v[0]]} mode.`,
-                )
-              }
-              aria-label="Reasoning effort"
-              className="flex-1"
-            />
-            <span className="w-14 shrink-0 rounded-md border bg-muted/50 py-1 text-center font-mono text-sm">
-              {settings.reasoning}/5
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 font-mono text-sm">
+              {settings.model}
             </span>
-          </div>
-          <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
-            {REASONING_LABELS.slice(1).map((l, i) => (
-              <span key={l} className={settings.reasoning === i + 1 ? "text-primary" : undefined}>
-                {i + 1} · {l}
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 font-mono text-sm text-muted-foreground">
+              {effectiveEffort(settings.model, settings.effort)} effort
+            </span>
+            {isVisionModel(settings.model) && (
+              <span className="rounded-md border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+                Vision
               </span>
-            ))}
+            )}
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+              {formatContextWindow(modelRuleFor(settings.model).contextWindow)}
+              context
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -552,6 +567,1200 @@ function GeneralTab() {
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+// ——— Models (FE2: the zcode ModelProviderSection, commerce) ———
+
+const API_FORMAT_LABEL: Record<ModelApiFormat, string> = {
+  "anthropic-messages": "Anthropic messages",
+  "openai-chat-completions": "Chat completions (/v1/chat/completions)",
+  "openai-responses": "Responses (/responses)",
+};
+
+const PROVIDER_STATUS_DOT: Record<ProviderStatus, string> = {
+  ready: "bg-emerald-500",
+  "not-ready": "bg-amber-500",
+  disabled: "bg-muted-foreground/40",
+};
+
+const PROVIDER_STATUS_LABEL: Record<ProviderStatus, string> = {
+  ready: "Ready",
+  "not-ready": "Not ready",
+  disabled: "Disabled",
+};
+
+function ProviderLogoTile({ name }: { name: string }) {
+  return (
+    <span
+      aria-hidden
+      className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-muted/50 text-xs font-semibold"
+    >
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
+function ModelsTab() {
+  const { settings, setSettings, pushToast } = useProduct();
+  const [selectedId, setSelectedId] = useState(settings.models[0]?.id ?? "");
+  const [addingProvider, setAddingProvider] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [modelDialog, setModelDialog] = useState<
+    { mode: "add" } | { mode: "edit"; modelId: string } | null
+  >(null);
+  const [deleteProvider, setDeleteProvider] = useState<string | null>(null);
+
+  const providers = settings.models;
+  const selected =
+    providers.find((p) => p.id === selectedId) ?? providers[0] ?? null;
+
+  const persist = (next: ModelProviderConfig[]) =>
+    setSettings({ models: next });
+
+  const updateProvider = (id: string, patch: Partial<ModelProviderConfig>) =>
+    persist(providers.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+
+  const setModelEnabled = (pid: string, mid: string, enabled: boolean) =>
+    persist(
+      providers.map((p) =>
+        p.id === pid
+          ? {
+              ...p,
+              models: p.models.map((m) =>
+                m.id === mid ? { ...m, enabled } : m,
+              ),
+            }
+          : p,
+      ),
+    );
+
+  const testModel = (p: ModelProviderConfig, mid: string) => {
+    const status = providerStatus(p);
+    pushToast("Testing " + p.name + " / " + mid, "A connectivity probe…");
+    window.setTimeout(() => {
+      if (status === "ready") {
+        pushToast(p.name + " / " + mid + " connected", "The probe came back clean.");
+      } else {
+        pushToast(
+          "Failed to connect to " + p.name + " / " + mid,
+          status === "disabled"
+            ? "Enable the provider first."
+            : "Set the API key first.",
+        );
+      }
+    }, 600);
+  };
+
+  const addFromTemplate = (t: ProviderTemplate) => {
+    const id = "p-" + Date.now().toString(36);
+    const next = [...providers, providerFromTemplate(t, id)];
+    persist(next);
+    setSelectedId(id);
+    setAddingProvider(false);
+    pushToast(t.name + " added", "Configure its access to make it ready.");
+  };
+
+  const addCustomProvider = () => {
+    const id = "p-" + Date.now().toString(36);
+    const next: ModelProviderConfig[] = [
+      ...providers,
+      {
+        id,
+        name: "New provider",
+        preset: false,
+        access: "api-key",
+        apiFormat: "openai-chat-completions",
+        baseUrl: "",
+        apiKey: "",
+        enabled: true,
+        models: [],
+      },
+    ];
+    persist(next);
+    setSelectedId(id);
+    setAddingProvider(false);
+    pushToast("New provider added", "Name it, point it at a Base URL, add models.");
+  };
+
+  const removeProvider = (id: string) => {
+    const target = providers.find((p) => p.id === id);
+    persist(providers.filter((p) => p.id !== id));
+    if (selectedId === id) setSelectedId(providers[0]?.id ?? "");
+    setDeleteProvider(null);
+    pushToast("Provider deleted", target?.name + " is off the workspace.");
+  };
+
+  const keyUrl = selected?.templateId
+    ? templateById(selected.templateId)?.apiKeyManagementUrl
+    : undefined;
+
+  // ——— Add-provider template picker pane (zcode ProviderTemplatePicker) ———
+  if (addingProvider) {
+    const zhipu = PROVIDER_TEMPLATES.filter((t) => t.group === "Zhipu");
+    const other = PROVIDER_TEMPLATES.filter((t) => t.group === "Other");
+    return (
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          className="h-11 -ml-2 px-3"
+          onClick={() => setAddingProvider(false)}
+        >
+          <ArrowLeft aria-hidden className="h-4 w-4" />
+          Back to provider details
+        </Button>
+        <h3 className="text-base font-semibold">Add provider</h3>
+        {[
+          { label: "Zhipu", list: zhipu },
+          { label: "Other", list: other },
+        ].map((group) => (
+          <section key={group.label} aria-label={group.label + " providers"}>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              {group.label}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {group.label === "Other" && (
+                <button
+                  type="button"
+                  onClick={addCustomProvider}
+                  className="flex min-h-16 items-center gap-3 rounded-xl border border-dashed p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex size-8 items-center justify-center rounded-md border bg-muted/50">
+                    <Plus aria-hidden className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm font-medium">
+                    Create custom provider
+                  </span>
+                </button>
+              )}
+              {group.list.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => addFromTemplate(t)}
+                  className="flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ProviderLogoTile name={t.name} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {t.name}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {t.models.length} models ·{" "}
+                      {t.access === "coding-plan" ? "Coding Plan" : "API key"}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    aria-hidden
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                  />
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  // ——— The split panel ———
+  return (
+    <>
+      {/* Default model — the picker ↔ settings bridge */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Default model</CardTitle>
+          <CardDescription>
+            New missions start with the default. Change it per mission in the
+            composer.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ModelPicker
+            value={{
+              providerId: "",
+              modelId: settings.model,
+              effort: settings.effort,
+            }}
+            onChange={(v) => {
+              setSettings({ model: v.modelId, effort: v.effort });
+              pushToast(
+                "Default model set",
+                v.modelId + " · " + effectiveEffort(v.modelId, v.effort) + " effort.",
+              );
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-row items-center justify-between gap-2 border-b px-4 py-3">
+          <p className="text-sm font-semibold">Providers</p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11"
+              aria-label="Refresh model settings"
+              onClick={() =>
+                pushToast(
+                  "Model settings refreshed",
+                  "Read back from the workspace record.",
+                )
+              }
+            >
+              <RefreshCw aria-hidden className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => setAddingProvider(true)}
+            >
+              <Plus aria-hidden className="h-4 w-4" />
+              Add provider
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-[224px_minmax(0,1fr)]">
+          {/* Rail */}
+          <div
+            className={`max-h-[26rem] overflow-y-auto border-b bg-muted/20 p-2 md:max-h-[36rem] md:border-b-0 md:border-r ${THIN_SCROLL}`}
+            role="listbox"
+            aria-label="Model providers"
+          >
+            <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Providers
+            </p>
+            {providers
+              .filter((p) => p.preset)
+              .map((p) => (
+                <ProviderRailRow
+                  key={p.id}
+                  provider={p}
+                  active={selected?.id === p.id}
+                  onSelect={() => setSelectedId(p.id)}
+                />
+              ))}
+            {providers.some((p) => !p.preset) && (
+              <>
+                <p className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Custom providers
+                </p>
+                {providers
+                  .filter((p) => !p.preset)
+                  .map((p) => (
+                    <ProviderRailRow
+                      key={p.id}
+                      provider={p}
+                      active={selected?.id === p.id}
+                      onSelect={() => setSelectedId(p.id)}
+                    />
+                  ))}
+              </>
+            )}
+          </div>
+
+          {/* Detail */}
+          <div
+            className={`max-h-[36rem] overflow-y-auto p-4 sm:p-5 ${THIN_SCROLL}`}
+          >
+            {selected ? (
+              <ProviderDetail
+                provider={selected}
+                showKey={showKey}
+                onToggleShowKey={() => setShowKey((v) => !v)}
+                onRename={(name) => updateProvider(selected.id, { name })}
+                onToggleEnabled={(enabled) =>
+                  updateProvider(selected.id, { enabled })
+                }
+                onChange={(patch) => updateProvider(selected.id, patch)}
+                onModelEnabled={(mid, enabled) =>
+                  setModelEnabled(selected.id, mid, enabled)
+                }
+                onTest={testModel}
+                onEditModel={(mid) => setModelDialog({ mode: "edit", modelId: mid })}
+                onAddModel={() => setModelDialog({ mode: "add" })}
+                onDeleteModel={(mid) => {
+                  updateProvider(selected.id, {
+                    models: selected.models.filter((m) => m.id !== mid),
+                  });
+                  pushToast("Model removed", mid + " is off this provider.");
+                }}
+                onRequestDelete={() => setDeleteProvider(selected.id)}
+                keyUrl={keyUrl}
+              />
+            ) : (
+              <div className="flex h-full min-h-40 items-center justify-center rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                No providers yet — add one to configure models.
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Add / edit model dialog — remounts fresh per open (the 4-c law) */}
+      {modelDialog && selected && (
+        <ModelDialog
+          key={
+            modelDialog.mode === "edit" ? "edit-" + modelDialog.modelId : "add"
+          }
+          dialog={modelDialog}
+          provider={selected}
+          onClose={() => setModelDialog(null)}
+          onSave={(mid, rule) => {
+            const exists = selected.models.some((m) => m.id === mid);
+            const models = exists
+              ? selected.models.map((m) => (m.id === mid ? { ...m } : m))
+              : [...selected.models, { id: mid, enabled: true }];
+            // edit persists capability overrides by keeping the id; the catalog
+            // rule stays the source of truth for badges.
+            persist(
+              providers.map((p) =>
+                p.id === selected.id ? { ...p, models } : p,
+              ),
+            );
+            pushToast(
+              exists ? "Model settings saved" : "Model added",
+              mid + " · " + formatContextWindow(rule.contextWindow) + " context.",
+            );
+            setModelDialog(null);
+          }}
+        />
+      )}
+
+      {/* Delete provider confirm — zcode verbatim */}
+      <AlertDialog
+        open={deleteProvider !== null}
+        onOpenChange={(v) => !v && setDeleteProvider(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete provider "{providers.find((p) => p.id === deleteProvider)?.name}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the custom provider configuration. Related edits on
+              the current settings page will not be restored automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteProvider && removeProvider(deleteProvider)}
+            >
+              Delete provider
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function ProviderRailRow({
+  provider,
+  active,
+  onSelect,
+}: {
+  provider: ModelProviderConfig;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const status = providerStatus(provider);
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={active}
+      onClick={onSelect}
+      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        active ? "bg-accent" : "hover:bg-accent/50"
+      }`}
+    >
+      <ProviderLogoTile name={provider.name} />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        {provider.name}
+      </span>
+      <span
+        aria-hidden
+        title={PROVIDER_STATUS_LABEL[status]}
+        className={`size-2 shrink-0 rounded-full ${PROVIDER_STATUS_DOT[status]}`}
+      />
+    </button>
+  );
+}
+
+function ProviderDetail({
+  provider,
+  showKey,
+  onToggleShowKey,
+  onRename,
+  onToggleEnabled,
+  onChange,
+  onModelEnabled,
+  onTest,
+  onEditModel,
+  onAddModel,
+  onDeleteModel,
+  onRequestDelete,
+  keyUrl,
+}: {
+  provider: ModelProviderConfig;
+  showKey: boolean;
+  onToggleShowKey: () => void;
+  onRename: (name: string) => void;
+  onToggleEnabled: (v: boolean) => void;
+  onChange: (patch: Partial<ModelProviderConfig>) => void;
+  onModelEnabled: (mid: string, enabled: boolean) => void;
+  onTest: (p: ModelProviderConfig, mid: string) => void;
+  onEditModel: (mid: string) => void;
+  onAddModel: () => void;
+  onDeleteModel: (mid: string) => void;
+  onRequestDelete: () => void;
+  keyUrl?: string;
+}) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(provider.name);
+  const template = provider.templateId
+    ? templateById(provider.templateId)
+    : undefined;
+  const catalogIds = new Set(template?.models ?? []);
+
+  return (
+    <div className="space-y-5">
+      {/* Header: name + enable + kebab */}
+      <div className="flex flex-wrap items-center gap-3">
+        <ProviderLogoTile name={provider.name} />
+        {editingName ? (
+          <Input
+            value={nameDraft}
+            autoFocus
+            aria-label="Provider name"
+            className="h-11 w-56 font-medium"
+            onChange={(e) => setNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                onRename(nameDraft.trim() || provider.name);
+                setEditingName(false);
+              }
+              if (e.key === "Escape") setEditingName(false);
+            }}
+            onBlur={() => {
+              onRename(nameDraft.trim() || provider.name);
+              setEditingName(false);
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (!provider.preset) {
+                setNameDraft(provider.name);
+                setEditingName(true);
+              }
+            }}
+            className="rounded-md px-1 text-base font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={provider.preset ? provider.name : "Rename provider"}
+          >
+            {provider.name}
+          </button>
+        )}
+        <span
+          className={`ml-auto flex items-center gap-2 text-xs ${provider.enabled ? "text-muted-foreground" : "text-muted-foreground"}`}
+        >
+          <Switch
+            id={"provider-enabled-" + provider.id}
+            checked={provider.enabled}
+            onCheckedChange={onToggleEnabled}
+            aria-label={provider.enabled ? "Disable provider" : "Enable provider"}
+          />
+          <label
+            htmlFor={"provider-enabled-" + provider.id}
+            className="cursor-pointer"
+          >
+            {provider.enabled ? "Enabled" : "Disabled"}
+          </label>
+        </span>
+        {!provider.preset && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-11"
+                aria-label="Provider actions"
+              >
+                <EllipsisVertical aria-hidden className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setNameDraft(provider.name);
+                  setEditingName(true);
+                }}
+              >
+                <Pencil aria-hidden className="h-4 w-4" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={onRequestDelete}
+              >
+                <Trash2 aria-hidden className="h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      {/* Connection */}
+      <section aria-label="Connection" className="space-y-3">
+        <h4 className="text-sm font-semibold">Connection</h4>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={"baseurl-" + provider.id}>Base URL</Label>
+            {provider.preset ? (
+              <p className="flex min-h-11 items-center gap-2 rounded-md border bg-muted/40 px-3 font-mono text-xs text-muted-foreground">
+                <Lock aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{provider.baseUrl}</span>
+                <span className="shrink-0">(read only)</span>
+              </p>
+            ) : (
+              <Input
+                id={"baseurl-" + provider.id}
+                value={provider.baseUrl}
+                placeholder="https://api.example.com/v1"
+                className="h-11 font-mono text-xs"
+                onChange={(e) => onChange({ baseUrl: e.target.value })}
+              />
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={"apiformat-" + provider.id}>API format</Label>
+            <Select
+              value={provider.apiFormat}
+              onValueChange={(v) => onChange({ apiFormat: v as ModelApiFormat })}
+            >
+              <SelectTrigger id={"apiformat-" + provider.id} className="h-11 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(API_FORMAT_LABEL) as ModelApiFormat[]).map((f) => (
+                  <SelectItem key={f} value={f}>
+                    {API_FORMAT_LABEL[f]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      {/* Access */}
+      <section aria-label="Access" className="space-y-3">
+        <h4 className="text-sm font-semibold">Access</h4>
+        {provider.access === "coding-plan" ? (
+          <div className="rounded-lg border bg-accent/40 p-3 text-sm">
+            Coding Plan connected — GLM-5.3 and GLM-5.3-Flash included.
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor={"apikey-" + provider.id}>API key</Label>
+              {keyUrl && (
+                <a
+                  href={keyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  Get API key
+                  <ArrowUpRight aria-hidden className="h-3.5 w-3.5" />
+                </a>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                id={"apikey-" + provider.id}
+                type={showKey ? "text" : "password"}
+                value={provider.apiKey}
+                placeholder="Enter API key"
+                className="h-11 pr-12 font-mono text-xs"
+                onChange={(e) => onChange({ apiKey: e.target.value })}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1 size-9"
+                aria-label={showKey ? "Hide API key" : "Show API key"}
+                onClick={onToggleShowKey}
+              >
+                {showKey ? (
+                  <EyeOff aria-hidden className="h-4 w-4" />
+                ) : (
+                  <Eye aria-hidden className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Stored in this workspace only — never rendered in evidence.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Model list */}
+      <section aria-label="Model list" className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold">Model list</h4>
+          <Button variant="outline" className="h-11" onClick={onAddModel}>
+            <Plus aria-hidden className="h-4 w-4" />
+            Add model
+          </Button>
+        </div>
+        {provider.models.length === 0 ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-dashed p-4">
+            <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No models are configured. Add a model to use it in missions.
+            </p>
+          </div>
+        ) : (
+          <ul
+            className={`max-h-[26rem] divide-y overflow-y-auto rounded-xl border ${THIN_SCROLL}`}
+          >
+            {provider.models.map((m) => {
+              const rule = modelRuleFor(m.id);
+              return (
+                <li
+                  key={m.id}
+                  className="flex flex-wrap items-center gap-2 px-3 py-2"
+                >
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs font-medium">
+                    {m.id}
+                  </span>
+                  <span
+                    title={"Context window: " + formatContextWindow(rule.contextWindow)}
+                    className="shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                  >
+                    {formatContextWindow(rule.contextWindow)}
+                  </span>
+                  {isVisionModel(m.id) && (
+                    <span className="flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <Eye aria-hidden className="h-3 w-3" />
+                      Vision
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11"
+                    aria-label={"Test " + m.id}
+                    title="Test model"
+                    onClick={() => onTest(provider, m.id)}
+                  >
+                    <Unplug aria-hidden className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11"
+                    aria-label={"Edit " + m.id}
+                    title="Edit model settings"
+                    onClick={() => onEditModel(m.id)}
+                  >
+                    <Pencil aria-hidden className="h-4 w-4" />
+                  </Button>
+                  {!catalogIds.has(m.id) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-11 text-destructive hover:text-destructive"
+                      aria-label={"Delete " + m.id}
+                      title="Delete"
+                      onClick={() => onDeleteModel(m.id)}
+                    >
+                      <Trash2 aria-hidden className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Switch
+                    id={"model-enabled-" + provider.id + "-" + m.id}
+                    checked={m.enabled}
+                    onCheckedChange={(v) => onModelEnabled(m.id, v)}
+                    aria-label={m.enabled ? "Disable" : "Enable"}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** The Add/Edit model dialog — zcode's Smart configuration, commerce. */
+function ModelDialog({
+  dialog,
+  provider,
+  onClose,
+  onSave,
+}: {
+  dialog: { mode: "add" } | { mode: "edit"; modelId: string };
+  provider: ModelProviderConfig | null;
+  onClose: () => void;
+  onSave: (modelId: string, rule: CatalogModel) => void;
+}) {
+  const [smart, setSmart] = useState(true);
+  const [modelId, setModelId] = useState(
+    dialog.mode === "edit" ? dialog.modelId : "",
+  );
+  const seed = modelId ? modelRuleFor(modelId) : null;
+  const [contextWindow, setContextWindow] = useState(
+    seed ? String(seed.contextWindow) : "",
+  );
+  const [maxOutput, setMaxOutput] = useState(
+    seed ? String(seed.maxOutputTokens) : "",
+  );
+  const [inputs, setInputs] = useState<ModelInput[]>(
+    seed ? seed.inputs : ["text"],
+  );
+  const [caps, setCaps] = useState<string[]>(
+    seed?.supportsToolCall ? ["Tool calls"] : [],
+  );
+  const [levels, setLevels] = useState(
+    seed ? seed.reasoning.join(", ") : "",
+  );
+  const [error, setError] = useState("");
+  const [matched, setMatched] = useState(
+    !!modelId && CATALOG_MODELS[modelId] !== undefined,
+  );
+
+  if (!provider) return null;
+
+  const applySmart = (id: string) => {
+    setModelId(id);
+    if (!smart) return;
+    const rule = modelRuleFor(id);
+    setContextWindow(String(rule.contextWindow));
+    setMaxOutput(String(rule.maxOutputTokens));
+    setInputs(rule.inputs);
+    setCaps(rule.supportsToolCall ? ["Tool calls"] : []);
+    setLevels(rule.reasoning.join(", "));
+    setMatched(CATALOG_MODELS[id] !== undefined);
+  };
+
+  const save = () => {
+    const id = modelId.trim();
+    if (!id) {
+      setError("Model ID is required");
+      return;
+    }
+    const ctx = Number(contextWindow);
+    if (!Number.isFinite(ctx) || ctx <= 0 || !Number.isInteger(ctx)) {
+      setError("Context window must be a positive integer");
+      return;
+    }
+    const out = Number(maxOutput);
+    if (!Number.isFinite(out) || out <= 0 || !Number.isInteger(out)) {
+      setError("Max output tokens must be a positive integer");
+      return;
+    }
+    onSave(id, { ...modelRuleFor(id), contextWindow: ctx, maxOutputTokens: out });
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {dialog.mode === "edit" ? "Edit model settings" : "Add model"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Edit the context window for this model.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <SwitchRow
+            id="smart-config"
+            label="Smart configuration"
+            helper="Matches recommended configuration using the model ID, Base URL, and API format. When you manually change a setting, that setting becomes manually managed."
+            checked={smart}
+            onCheckedChange={(v) => setSmart(v)}
+          />
+          {matched && smart && (
+            <p className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">
+              <Sparkles aria-hidden className="h-3 w-3" />
+              Smart configuration matched for this model
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="model-id">Model ID</Label>
+            <Input
+              id="model-id"
+              value={modelId}
+              placeholder="e.g. GLM-4.6"
+              className="h-11 font-mono text-xs"
+              readOnly={dialog.mode === "edit"}
+              onChange={(e) => applySmart(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="model-ctx">Context window</Label>
+              <Input
+                id="model-ctx"
+                value={contextWindow}
+                inputMode="numeric"
+                placeholder="200000"
+                className="h-11 font-mono text-xs"
+                onChange={(e) => {
+                  setSmart(false);
+                  setContextWindow(e.target.value.replace(/[^0-9]/g, ""));
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="model-out">Max output tokens</Label>
+              <Input
+                id="model-out"
+                value={maxOutput}
+                inputMode="numeric"
+                placeholder="131072"
+                className="h-11 font-mono text-xs"
+                onChange={(e) => {
+                  setSmart(false);
+                  setMaxOutput(e.target.value.replace(/[^0-9]/g, ""));
+                }}
+              />
+            </div>
+          </div>
+
+          <Collapsible>
+            <CollapsibleTrigger className="min-h-11 text-sm font-medium text-primary hover:underline">
+              Advanced settings
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label>Input types</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(["text", "image", "video", "audio", "pdf"] as ModelInput[]).map(
+                    (t) => {
+                      const on = inputs.includes(t);
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          aria-pressed={on}
+                          disabled={t === "text"}
+                          onClick={() =>
+                            setInputs(
+                              on
+                                ? inputs.filter((x) => x !== t)
+                                : [...inputs, t],
+                            )
+                          }
+                          className={`min-h-11 rounded-full border px-3.5 text-sm capitalize transition-colors ${
+                            on
+                              ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+                              : "text-muted-foreground hover:bg-accent/50"
+                          } ${t === "text" ? "opacity-70" : ""}`}
+                        >
+                          {t}
+                          {t === "text" && " (required)"}
+                        </button>
+                      );
+                    },
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Model capabilities</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Tool calls",
+                    "Structured output",
+                    "Native web search",
+                    "Mid-conversation system messages",
+                  ].map((c) => {
+                    const on = caps.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          setCaps(on ? caps.filter((x) => x !== c) : [...caps, c])
+                        }
+                        className={`min-h-11 rounded-full border px-3.5 text-sm transition-colors ${
+                          on
+                            ? "border-primary/40 bg-accent font-medium text-accent-foreground"
+                            : "text-muted-foreground hover:bg-accent/50"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="model-levels">
+                  Reasoning levels (low to high)
+                </Label>
+                <Input
+                  id="model-levels"
+                  value={levels}
+                  placeholder="disabled, enabled"
+                  className="h-11 font-mono text-xs"
+                  onChange={(e) => {
+                    setSmart(false);
+                    setLevels(e.target.value);
+                  }}
+                />
+                {levels.trim() && (
+                  <p className="flex flex-wrap gap-1.5 pt-1">
+                    {levels
+                      .split(",")
+                      .map((l) => l.trim())
+                      .filter(Boolean)
+                      .map((l) => (
+                        <span
+                          key={l}
+                          className="rounded border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        >
+                          {l}
+                        </span>
+                      ))}
+                  </p>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {error && (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="ghost"
+            className="h-11"
+            onClick={() => {
+              const id = dialog.mode === "edit" ? dialog.modelId : "";
+              const rule = id ? modelRuleFor(id) : null;
+              setModelId(id);
+              setSmart(true);
+              setContextWindow(rule ? String(rule.contextWindow) : "");
+              setMaxOutput(rule ? String(rule.maxOutputTokens) : "");
+              setInputs(rule ? rule.inputs : ["text"]);
+              setCaps(rule?.supportsToolCall ? ["Tool calls"] : []);
+              setLevels(rule ? rule.reasoning.join(", ") : "");
+              setError("");
+            }}
+          >
+            <RotateCcw aria-hidden className="h-4 w-4" />
+            Reset form
+          </Button>
+          <Button variant="outline" className="h-11" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button className="h-11" onClick={save}>
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ——— Usage (FE2: honest, live-derived from the workspace record) ———
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function UsageTab() {
+  const watchEvents = useProduct((s) => s.watchEvents);
+  const missions = useProduct((s) => s.missions);
+  const resolved = useProduct((s) => s.resolved);
+  const chat = useProduct((s) => s.chat);
+  const skills = useProduct((s) => s.skills);
+  const settings = useProduct((s) => s.settings);
+
+  // 8 weeks × 7 days of event counts (createdAt day buckets, oldest → newest).
+  const days = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of watchEvents) {
+      if (!e.createdAt) continue; // undated demo seeds never paint the record
+      const d = new Date(e.createdAt);
+      if (Number.isNaN(d.getTime())) continue;
+      counts.set(d.toISOString().slice(0, 10), (counts.get(d.toISOString().slice(0, 10)) ?? 0) + 1);
+    }
+    const out: { key: string; label: string; count: number }[] = [];
+    const today = new Date();
+    for (let i = 55; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      out.push({
+        key,
+        label: WEEKDAYS[d.getUTCDay()],
+        count: counts.get(key) ?? 0,
+      });
+    }
+    return out;
+  }, [watchEvents]);
+
+  const max = Math.max(...days.map((d) => d.count), 1);
+  const busiest = days.reduce(
+    (best, d) => (d.count > best.count ? d : best),
+    { label: "", count: 0 } as { label: string; count: number },
+  );
+  const approved = resolved.filter((r) => r.verdict === "approved").length;
+  const declined = resolved.length - approved;
+  const running = missions.filter((m) => m.status === "running").length;
+  const actorCounts = new Map<string, number>();
+  for (const e of watchEvents) {
+    actorCounts.set(e.actor, (actorCounts.get(e.actor) ?? 0) + 1);
+  }
+  const topActor = [...actorCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const enabledModels = settings.models.reduce(
+    (n, p) => n + (p.enabled ? p.models.filter((m) => m.enabled).length : 0),
+    0,
+  );
+
+  const tiles: { label: string; value: string; hint?: string }[] = [
+    {
+      label: "Busiest day",
+      value: busiest.count > 0 ? busiest.label : "—",
+      hint:
+        busiest.count > 0 ? `about ${busiest.count} events` : "no events yet",
+    },
+    {
+      label: "Missions run",
+      value: String(missions.length),
+      hint: `${running} running`,
+    },
+    {
+      label: "Decisions handled",
+      value: String(resolved.length),
+      hint: `${approved} approved · ${declined} declined`,
+    },
+    { label: "Chat turns", value: String(chat.length), hint: "with the agent" },
+    {
+      label: "Most active actor",
+      value: topActor ? topActor[0] : "—",
+      hint: topActor ? `${topActor[1]} events` : "the record starts with the first",
+    },
+    {
+      label: "Skills on watch",
+      value: String(skills.length),
+      hint: "capability packs installed",
+    },
+  ];
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Mission activity</CardTitle>
+          <CardDescription>
+            Built from the local ring record.{" "}
+            {busiest.count > 0 &&
+              `The busiest day was ${busiest.label}, with about ${busiest.count} events.`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div
+            role="img"
+            aria-label="Watch events per day over the last eight weeks"
+            className="grid grid-flow-col grid-rows-7 gap-1"
+          >
+            {days.map((d) => (
+              <span
+                key={d.key}
+                title={`${d.key} · ${d.count} event${d.count === 1 ? "" : "s"}`}
+                className={`size-4 rounded-[3px] border ${
+                  d.count === 0
+                    ? "bg-muted/50"
+                    : d.count / max > 0.66
+                      ? "bg-primary/70"
+                      : d.count / max > 0.33
+                        ? "bg-primary/40"
+                        : "bg-primary/15"
+                }`}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span>Less</span>
+            <span className="size-3 rounded-[3px] bg-muted/50" />
+            <span className="size-3 rounded-[3px] bg-primary/15" />
+            <span className="size-3 rounded-[3px] bg-primary/40" />
+            <span className="size-3 rounded-[3px] bg-primary/70" />
+            <span>More</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {tiles.map((t) => (
+          <Card key={t.label}>
+            <CardContent className="p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                {t.label}
+              </p>
+              <p className="mt-1.5 truncate font-mono text-lg font-semibold">
+                {t.value}
+              </p>
+              {t.hint && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{t.hint}</p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Model access</CardTitle>
+          <CardDescription>
+            The workspace's current model posture.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 text-xs">
+              Coding Plan · Z.ai
+            </span>
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 font-mono text-xs">
+              default {settings.model}
+            </span>
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 font-mono text-xs text-muted-foreground">
+              {effectiveEffort(settings.model, settings.effort)} effort
+            </span>
+            <span className="rounded-md border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+              {enabledModels} models enabled across{" "}
+              {settings.models.filter((p) => p.enabled).length} providers
+            </span>
+          </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Quota syncing lands with the billing connector — nothing is
+            estimated here.
+          </p>
         </CardContent>
       </Card>
     </>

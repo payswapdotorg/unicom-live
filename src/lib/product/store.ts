@@ -18,6 +18,7 @@
 // new-task draft, plus the launch pipeline (draft → running mission →
 // dispatch watch event → missions section). Base behavior is untouched.
 import { create } from "zustand";
+import { normalizeModelSettings } from "./models";
 import {
   type Decision,
   type DiffBlock,
@@ -60,6 +61,12 @@ export type TaskDraft = {
   groupId: string; // "" ungrouped | group id | "__new__"
   newGroupName: string;
   autonomy: "plan" | "act";
+  // FE2 (zcode draft emergence): the mission's execution mode + model choice.
+  // mode maps the zcode permission radio (ask/autonomous/full); model+effort
+  // "" = inherit the workspace default (resolved at launch).
+  mode: "confirm" | "autonomous" | "full";
+  model: string; // "" | catalog model id
+  effort: string; // "" | reasoning level
   guardrails: {
     prices: boolean;
     publishing: boolean;
@@ -76,6 +83,9 @@ const freshDraft = (storeIds: string[]): TaskDraft => ({
   groupId: "",
   newGroupName: "",
   autonomy: "plan",
+  mode: "confirm",
+  model: "",
+  effort: "",
   guardrails: { prices: true, publishing: true, data: true, spend: true },
   context: ["morning-brief"],
 });
@@ -171,8 +181,12 @@ interface ProductState {
   settings: SettingsState;
   groups: ProjectGroup[];
   draft: TaskDraft;
+  // FE2 — the active Settings tab id (shared so the palette + model picker
+  // can deep-link into Model settings)
+  settingsTab: string;
 
   setSection: (s: Section) => void;
+  setSettingsTab: (t: string) => void;
   startConnect: (platform: string) => void;
   advanceConnect: () => void;
   finishConnect: (store: Omit<StoreConnection, "installedSkills">) => void;
@@ -260,8 +274,10 @@ export const useProduct = create<ProductState>((set, get) => ({
   settings: structuredClone(SEED_SETTINGS),
   groups: SEED_GROUPS,
   draft: INITIAL_DRAFT,
+  settingsTab: "general",
 
   setSection: (section) => set({ section }),
+  setSettingsTab: (tab) => set({ settingsTab: tab }),
 
   startConnect: (platform) =>
     set({ connecting: { platform, step: 0 } }),
@@ -284,6 +300,7 @@ export const useProduct = create<ProductState>((set, get) => ({
           {
             id: `e-${Date.now()}`,
             ts: nowZ(),
+            createdAt: new Date().toISOString(),
             kind: "heal" as const,
             actor: "connector",
             text: `${final.name} connected — initial catalog sync queued (${final.products} products)`,
@@ -321,6 +338,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "review" as const,
           actor: "you",
           text: `${verdict === "approved" ? "Approved" : "Declined"} — ${d.title}`,
@@ -373,6 +391,7 @@ export const useProduct = create<ProductState>((set, get) => ({
             {
               id: `e-${Date.now()}`,
               ts: nowZ(),
+              createdAt: new Date().toISOString(),
               kind: "dispatch" as const,
               actor: skillId,
               text: `${skill.name} installed on ${store.name} — initial sweep queued`,
@@ -495,6 +514,9 @@ export const useProduct = create<ProductState>((set, get) => ({
     set({ hydrating: true });
     try {
       const data = await api<HydratePayload>("/api/hydrate");
+      // FE2: legacy persisted rows carry the pre-FE2 settings shape (narrow
+      // model ids, no effort/models) — normalize client-side, never in the API.
+      const normalized = normalizeModelSettings(data.settings);
       set((s) => ({
         stores: data.stores,
         missions: data.missions,
@@ -502,7 +524,12 @@ export const useProduct = create<ProductState>((set, get) => ({
         resolved: data.resolvedDecisions,
         watchEvents: data.watchEvents,
         skills: data.skills,
-        settings: data.settings,
+        settings: {
+          ...data.settings,
+          model: normalized.model,
+          effort: normalized.effort,
+          models: normalized.models,
+        },
         // The DB persists text+plan only — re-attach the c-1 inline evidence
         // (diff preview + jump link), and settle past sessions' agent plans
         // as approved + complete so history never pulses at step 0.
@@ -738,6 +765,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "heartbeat" as const,
           actor: "sync-engine",
           text: `${store.name} synced — catalog fresh as of now`,
@@ -766,6 +794,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "dispatch" as const,
           actor: "you",
           text: `Sync queued for ${n} stores — full catalog refresh running`,
@@ -787,6 +816,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "heal" as const,
           actor: "connector",
           text: `${store.name} reconnected — connection healthy again`,
@@ -812,6 +842,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "review" as const,
           actor: "you",
           text: `${store.name} revoked — access tokens destroyed`,
@@ -850,6 +881,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "review" as const,
           actor: "you",
           text: `All missions paused — ${touched} running mission${touched === 1 ? "" : "s"} now awaiting you`,
@@ -882,6 +914,7 @@ export const useProduct = create<ProductState>((set, get) => ({
         {
           id: `e-${Date.now()}`,
           ts: nowZ(),
+          createdAt: new Date().toISOString(),
           kind: "review" as const,
           actor: "you",
           text: `All stores disconnected — the ring is quiet`,
@@ -983,6 +1016,7 @@ export const useProduct = create<ProductState>((set, get) => ({
           {
             id: `e-${Date.now()}`,
             ts: nowZ(),
+            createdAt: new Date().toISOString(),
             kind: "dispatch" as const,
             actor: "orchestrator",
             text: `Mission dispatched — ${scopeCount} store${scopeCount > 1 ? "s" : ""} · ${autonomy === "plan" ? "plan-first" : "act-now"} · ${guardCount === 4 ? "all guardrails on" : `${guardCount} of 4 guardrails on`}`,
