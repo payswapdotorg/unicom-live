@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Check,
@@ -499,6 +499,14 @@ export function ConnectDialog({
   );
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
+  // finish latch — the effect below re-runs when the finish callback clears
+  // name/domain while `connecting` is still non-null (it only turns null when
+  // the POST resolves in finishConnect), which used to schedule a SECOND
+  // 250ms timer that fired finishConnect again with empty fields — minting a
+  // duplicate "My … store" (caught live in the 2026-10-26 deployment battery:
+  // two POSTs 100ms apart, one with the merchant's values, one with defaults).
+  // The latch makes the finish one-shot per dialog mount.
+  const finishedRef = useRef(false);
 
   // drive the connect progress (online: OAuth · local: the edge path)
   useEffect(() => {
@@ -506,6 +514,8 @@ export function ConnectDialog({
     if (connecting.step >= connectCopyFor(connecting.platform).length) {
       const p = platformOf(connecting.platform as PlatformId);
       const t = setTimeout(() => {
+        if (finishedRef.current) return;
+        finishedRef.current = true;
         finishConnect({
           id: `store-${Date.now()}`,
           name: name || `My ${p.name} store`,
